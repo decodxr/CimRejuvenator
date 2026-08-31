@@ -15,36 +15,55 @@ if ($null -eq $dotnet) {
     Write-Host "[OK] dotnet encontrado: $version" -ForegroundColor Green
 }
 
-if ([string]::IsNullOrWhiteSpace($env:CSII_TOOLPATH)) {
-    Write-Host "[ERRO] CSII_TOOLPATH esta vazio." -ForegroundColor Red
-    Write-Host "       Instale/atualize a Code Modding Toolchain do Cities: Skylines II e reinicie o Windows."
-    $ok = $false
-} else {
-    Write-Host "[OK] CSII_TOOLPATH: $env:CSII_TOOLPATH" -ForegroundColor Green
-
+$toolchainReady = $false
+if (-not [string]::IsNullOrWhiteSpace($env:CSII_TOOLPATH)) {
     $props = Join-Path $env:CSII_TOOLPATH "Mod.props"
     $targets = Join-Path $env:CSII_TOOLPATH "Mod.targets"
-
-    if (Test-Path $props) {
-        Write-Host "[OK] Mod.props encontrado" -ForegroundColor Green
-    } else {
-        Write-Host "[ERRO] Mod.props nao encontrado em: $props" -ForegroundColor Red
-        $ok = $false
-    }
-
-    if (Test-Path $targets) {
-        Write-Host "[OK] Mod.targets encontrado" -ForegroundColor Green
-    } else {
-        Write-Host "[ERRO] Mod.targets nao encontrado em: $targets" -ForegroundColor Red
-        $ok = $false
+    if ((Test-Path $props) -and (Test-Path $targets)) {
+        $toolchainReady = $true
+        Write-Host "[OK] Toolchain oficial encontrada em: $env:CSII_TOOLPATH" -ForegroundColor Green
     }
 }
 
+if (-not $toolchainReady) {
+    Write-Host "[INFO] Toolchain oficial nao esta pronta. Isso NAO impede o build sem Unity." -ForegroundColor Cyan
+}
+
+$gamePath = $env:CSII_GAMEPATH
+$candidates = @(
+    $gamePath,
+    "C:\Program Files (x86)\Steam\steamapps\common\Cities Skylines II",
+    "C:\Program Files\Steam\steamapps\common\Cities Skylines II",
+    "D:\SteamLibrary\steamapps\common\Cities Skylines II",
+    "E:\SteamLibrary\steamapps\common\Cities Skylines II"
+) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+$gameFound = $null
+foreach ($candidate in $candidates) {
+    if (Test-Path (Join-Path $candidate "Cities2_Data\Managed\Game.dll")) {
+        $gameFound = $candidate
+        break
+    }
+}
+
+if ($null -ne $gameFound) {
+    Write-Host "[OK] Jogo encontrado para build sem Unity: $gameFound" -ForegroundColor Green
+} else {
+    Write-Host "[AVISO] Jogo nao foi localizado automaticamente para o build sem Unity." -ForegroundColor Yellow
+    Write-Host '        Se estiver em outra unidade, defina: $env:CSII_GAMEPATH="CAMINHO_DO_JOGO"'
+}
+
 Write-Host ""
-if ($ok) {
-    Write-Host "Ambiente parece pronto para compilar." -ForegroundColor Green
+if ($ok -and ($toolchainReady -or $null -ne $gameFound)) {
+    Write-Host "Ambiente pronto para pelo menos um modo de compilacao." -ForegroundColor Green
+    if ($toolchainReady) {
+        Write-Host "  Oficial: .\build.ps1"
+    }
+    if ($null -ne $gameFound) {
+        Write-Host "  Sem Unity: .\build-no-unity.ps1"
+    }
     exit 0
 } else {
-    Write-Host "Existem problemas acima. Corrija-os antes de rodar build.ps1." -ForegroundColor Yellow
+    Write-Host "Ainda falta o .NET ou o caminho do jogo/toolchain." -ForegroundColor Yellow
     exit 1
 }
