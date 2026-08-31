@@ -1,28 +1,131 @@
-# Cim Rejuvenator v0.2.0
+# Cim Rejuvenator
 
-> **Status: experimental. Faça backup do save antes de usar.** O mod altera diretamente a idade dos cidadãos de Cities: Skylines II.
+Cim Rejuvenator is a population-management code mod for **Cities: Skylines II**. It started as a tool for recovering cities from extreme elderly population waves and now includes configurable rejuvenation, demographic balancing, immigration throttling, birth-rate control, incoming age shaping, population limits, and live statistics.
 
-O **Cim Rejuvenator** transforma uma porcentagem configurável dos cidadãos idosos em adultos novamente, preservando o mesmo cidadão.
+> **Experimental release:** make a backup of important saves before enabling population conversion features. Version 0.3.0 changes citizen life stages and simulation parameters at runtime.
 
-## 🚀 Tutoriais
+## Features
 
-- **Windows:** [TUTORIAL-WINDOWS.md](TUTORIAL-WINDOWS.md)
-- **Linux / Proton:** [TUTORIAL-LINUX.md](TUTORIAL-LINUX.md)
+### Rejuvenation
 
-A v0.2.0 também pode ser **compilada diretamente no Linux**, sem Unity e sem precisar voltar ao Windows.
+- Rejuvenation chance from 0% to 100%.
+- Configurable Adult age after rejuvenation.
+- Optional minimum-health restoration.
+- Up to **250,000 rejuvenations per simulation day**.
+- Up to **100,000 rejuvenations per population sweep**.
+- Optional minimum Elderly population share.
+- Manual `REJUVENATE NOW` action.
 
-### Linux — build + deploy automático
+### Demographic balancer
+
+The resident population can be moved gradually toward four configurable target weights:
+
+- Child
+- Teen
+- Adult
+- Elderly
+
+The weights are normalized automatically, so they do not need to total 100. A default balanced profile is `15 / 10 / 60 / 15`.
+
+Additional controls include:
+
+- Maximum life-stage conversions per sweep.
+- Worker protection to avoid converting employed Adults into non-working life stages.
+- Manual `BALANCE NOW` action.
+
+### Immigration control
+
+- Immigration intensity from 0% to 100%.
+- Optional soft daily cap for new resident citizens.
+- Optional resident population ceiling.
+- Incoming age-mix shaping with separate Child, Teen, Adult, and Elderly weights.
+- Live immigration status in the statistics section.
+
+Immigration control gates the game's resident `HouseholdSpawnSystem`. Daily limits are soft limits: a household that is already being created can cause the detected citizen count to finish slightly above the selected cap.
+
+### Birth control
+
+- Birth-rate multiplier from 0% to 500%.
+- Optional soft daily birth cap.
+- Optional automatic pause when the Child population reaches the configured demographic target.
+- Live display of the currently applied birth-rate multiplier.
+
+The controller scales the game's `CitizenParametersData.m_BaseBirthRate` and `m_AdultFemaleBirthRateBonus`. The original values are captured and restored when birth control is disabled or the system is destroyed.
+
+### Population statistics
+
+The Options panel reports:
+
+- Resident population.
+- Child, Teen, Adult, and Elderly counts and percentages.
+- Rejuvenations for the latest sweep, current day, and session.
+- Demographic conversions for the latest sweep and session.
+- Detected births for the current day and session.
+- Detected new residents for the current day and session.
+- Applied birth-rate multiplier.
+- Immigration controller status.
+- Population sweep count and last scanned simulation day.
+
+## Recommended starting profile
+
+For recovery from a severe elderly population wave:
+
+```text
+Rejuvenation enabled:              Yes
+Rejuvenation chance:               80%
+Age after rejuvenation:            40
+Restore minimum health:            Yes
+Maximum rejuvenations/day:         20,000
+Maximum rejuvenations/sweep:       5,000
+Minimum Elderly protection:        Off during recovery
+
+Demographic balancer:              Off initially
+Birth control:                     Off initially
+Immigration control:               Off initially
+Population sweeps/day:             64
+```
+
+After the city stabilizes, a useful demographic target is:
+
+```text
+Child:      15
+Teen:       10
+Adult:      60
+Elderly:    15
+```
+
+Enable the demographic balancer with a modest conversion limit, such as 2,000-5,000 per sweep, before trying higher values.
+
+## Aggressive recovery profile
+
+For a one-time recovery test on a backup save:
+
+```text
+Rejuvenation chance:               100%
+Maximum rejuvenations/day:         100,000
+Maximum rejuvenations/sweep:       50,000
+Population sweeps/day:             64
+```
+
+The absolute selectable limits are 250,000 per day and 100,000 per sweep. Large conversions can create immediate labour-market, education, traffic, and service-demand changes.
+
+## Build
+
+The project supports two build paths:
+
+- Directly against the assemblies installed with Cities: Skylines II. This does **not** require Unity activation and works on Windows or Linux.
+- The official Cities: Skylines II modding toolchain when `CSII_TOOLPATH` is available.
+
+### Linux / Proton
 
 ```bash
-sudo pacman -S git dotnet-sdk
-cd ~
 git clone https://github.com/decodxr/CimRejuvenator.git
 cd CimRejuvenator
 chmod +x build-no-unity-linux.sh
 ./build-no-unity-linux.sh --deploy
 ```
 
-Nas atualizações seguintes:
+For later updates:
 
 ```bash
 cd ~/CimRejuvenator
@@ -30,7 +133,9 @@ git pull
 ./build-no-unity-linux.sh --deploy
 ```
 
-### Windows — build sem Unity
+See [TUTORIAL-LINUX.md](TUTORIAL-LINUX.md) for game-path and Proton-path overrides.
+
+### Windows without Unity
 
 ```powershell
 git clone https://github.com/decodxr/CimRejuvenator.git
@@ -40,125 +145,62 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\build-no-unity.ps1
 ```
 
-Se o jogo estiver em outro caminho:
+See [TUTORIAL-WINDOWS.md](TUTORIAL-WINDOWS.md) for alternate Steam Library paths and troubleshooting.
 
-```powershell
-$env:CSII_GAMEPATH="D:\SteamLibrary\steamapps\common\Cities Skylines II"
-.\build-no-unity.ps1
-```
+## Local Linux installation
 
-A saída fica em:
+The default Proton user-data directory is usually:
 
 ```text
-dist\CimRejuvenator\CimRejuvenator.dll
+~/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II
 ```
 
-## ✨ Novidades da v0.2.0
-
-- **64 varreduras automáticas por dia** por padrão, configuráveis de 8 a 256.
-- A **primeira varredura acontece assim que a simulação começa**, sem esperar um intervalo inteiro.
-- Botão **REJUVENESCER AGORA** para solicitar uma varredura imediata.
-- Limite diário aumentado para até **250.000** rejuvenescimentos.
-- Novo limite por varredura de até **100.000** para evitar uma mudança gigantesca em um único tick.
-- Proteção demográfica opcional: manter pelo menos uma porcentagem escolhida de idosos.
-- Mais estatísticas: cidadãos analisados, idosos, porcentagem de idosos, rejuvenescidos na última varredura, total do dia, total da sessão e número de varreduras.
-- Logs mais detalhados para diagnosticar se o sistema está realmente executando.
-- Classe de configurações com nome exclusivo para reduzir risco de conflito com outros code mods.
-- Build direto no **Linux + deploy automático no prefixo Proton**.
-
-## Como funciona
-
-- Interface em **Opções > Mods > Cim Rejuvenator**.
-- Chance de rejuvenescimento de **0% a 100%**.
-- O mesmo cidadão volta de `Elderly` para `Adult`; casa, família, educação e identidade continuam pertencendo à mesma entidade.
-- A data de nascimento interna é reajustada para corresponder à idade escolhida.
-- Pode restaurar a saúde mínima para 80.
-- Cidadãos já mortos não são ressuscitados.
-- Doença e acidente continuam podendo matar.
-- O sorteio da porcentagem é estável durante o mesmo ciclo de velhice; um idoso que falhou em 80% não fica ganhando uma nova tentativa a cada frame.
-
-## Configuração recomendada
-
-Para uma cidade extremamente envelhecida, comece com:
+A local build should end up at:
 
 ```text
-Chance de rejuvenescimento:        80%
-Idade depois de rejuvenescer:      40
-Restaurar saúde:                   ligado
-Máximo por dia:                    20.000
-Máximo por varredura:               5.000
-Varreduras automáticas por dia:        64
-Proteção de mínimo de idosos:      desligada durante a recuperação
+.../Cities Skylines II/Mods/CimRejuvenator/CimRejuvenator.dll
 ```
 
-Se quiser fazer um teste agressivo para confirmar que o mod está funcionando:
+Do not install local development DLLs inside `.cache/Mods/pdx_mods`; that directory is managed by Paradox Mods.
+
+## Compatibility
+
+Cim Rejuvenator changes population-related systems and parameters. Mods that modify the same areas can override each other depending on update order.
+
+In particular, avoid enabling two different birth/fertility controllers at the same time. Any mod that writes `CitizenParametersData.m_BaseBirthRate` or `m_AdultFemaleBirthRateBonus` overlaps with Cim Rejuvenator's birth controller.
+
+Immigration-control mods that enable or disable `HouseholdSpawnSystem` also overlap with this mod's immigration controller.
+
+The demographic balancer deliberately preserves household identity and the citizen entity, but changing life stage can still affect employment, school demand, transport patterns, and household behaviour.
+
+## Implementation notes
+
+Cities: Skylines II represents life stage through `Citizen.GetAge()` / `Citizen.SetAge()`. `m_BirthDay` stores a simulation-day number, so life-stage conversions update both the age bits and birth day. The game currently uses these age thresholds:
 
 ```text
-Chance:                    100%
-Máximo por dia:         100.000
-Máximo por varredura:    50.000 ou 100.000
+Child -> Teen:       21 days
+Teen -> Adult:       36 days
+Adult -> Elderly:    84 days
 ```
 
-Depois volte para valores menores para não transformar a economia da cidade inteira de uma vez.
+Incoming-resident tracking establishes a baseline when the system starts, then counts newly created resident citizen entities. Newborn detection is based on newly created Child residents whose calculated age is zero days.
 
-### Proteção demográfica
+## Logs
 
-Você pode ativar:
+On Linux / Proton, logs are normally located under:
 
 ```text
-Manter porcentagem mínima de idosos: ligado
-Porcentagem mínima de idosos:        15%
+~/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Logs
 ```
 
-Assim o mod deixa de rejuvenescer quando a cidade se aproxima do percentual configurado.
-
-## Botão REJUVENESCER AGORA
-
-O botão agenda uma varredura para o próximo momento em que a **simulação estiver rodando**. Ele ainda respeita:
-
-- chance de rejuvenescimento;
-- máximo diário;
-- máximo por varredura;
-- proteção de porcentagem mínima de idosos.
-
-Se o jogo estiver pausado ou a tela de Opções tiver pausado a simulação, feche as opções e despause depois de apertar o botão.
-
-## Windows → Linux / Proton
-
-Depois do build no Windows, copie:
-
-```text
-dist\CimRejuvenator
-```
-
-para:
-
-```text
-~/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Mods/CimRejuvenator/
-```
-
-No final deve existir:
-
-```text
-.../Mods/CimRejuvenator/CimRejuvenator.dll
-```
-
-## Logs no Linux
-
-Para confirmar que o mod carregou:
+Useful command:
 
 ```bash
-grep -Rni "CimRejuvenator" \
+grep -RniE "CimRejuvenator|PopulationManagementSystem|Exception|ERROR" \
 "$HOME/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Logs" \
-| tail -100
+| tail -200
 ```
 
-O log próprio do mod fica normalmente em:
+## License
 
-```text
-.../Cities Skylines II/Logs/CimRejuvenator.log
-```
-
-## Licença
-
-MIT — veja [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
