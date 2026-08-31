@@ -128,8 +128,18 @@ namespace CimRejuvenator
                 var resetAge = Clamp(setting.ResetAgeDays, 36, 70);
 
                 citizen.SetAge(CitizenAge.Adult);
-                citizen.m_BirthDay = day - resetAge;
-                citizen.m_State |= CitizenFlags.NeedsNewJob;
+
+                // Current game builds store m_BirthDay as a 16-bit integer.
+                // Clamp before casting so a very long-running save cannot overflow it.
+                var newBirthDay = Clamp(day - resetAge, short.MinValue, short.MaxValue);
+                citizen.m_BirthDay = (short)newBirthDay;
+
+                // Older game/mod code used CitizenFlags.NeedsNewJob here. That flag no longer
+                // exists in current builds. Job seeking is now represented by Game.Agents
+                // HasJobSeeker / JobSeeker components, so we deliberately avoid writing an
+                // obsolete CitizenFlags value. The base game can create job-seeker state for
+                // unemployed adults; a dedicated explicit seeker path can be added after the
+                // first runtime test if needed.
 
                 if (setting.RestoreHealth && citizen.m_Health < 80)
                 {
