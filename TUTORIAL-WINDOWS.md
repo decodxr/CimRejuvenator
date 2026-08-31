@@ -1,38 +1,26 @@
-# TUTORIAL COMPLETO — Cim Rejuvenator v0.2.0
+# Windows Build Guide
 
-Este guia serve para baixar, compilar, levar para o Linux/Proton e testar o mod **sem depender desta conversa**.
+Cim Rejuvenator can be compiled locally without opening the Unity editor. The direct-assembly build references the DLLs installed with Cities: Skylines II.
 
-> **IMPORTANTE:** faça backup do save antes do primeiro teste. O mod altera diretamente a idade de cidadãos existentes.
+> Back up important saves before testing a new development build.
 
----
+## Requirements
 
-# 1 — CAMINHO RECOMENDADO: BUILD SEM UNITY
-
-Para teste local, você **não precisa ativar o Unity Editor**.
-
-O projeto usa diretamente as DLLs instaladas do Cities: Skylines II.
-
-## Instalar Git e .NET
-
-Abra PowerShell como administrador:
+Install Git and the .NET SDK from an elevated PowerShell window:
 
 ```powershell
 winget install Git.Git
 winget install Microsoft.DotNet.SDK.10
 ```
 
-Feche e abra o terminal depois.
-
-Confira:
+Open a new PowerShell window and verify:
 
 ```powershell
 git --version
 dotnet --version
 ```
 
----
-
-# 2 — BAIXAR O PROJETO
+## Clone the repository
 
 ```powershell
 cd C:\Users\$env:USERNAME
@@ -40,269 +28,128 @@ git clone https://github.com/decodxr/CimRejuvenator.git
 cd CimRejuvenator
 ```
 
-Se a pasta já existir:
+For an existing checkout:
 
 ```powershell
 cd C:\Users\$env:USERNAME\CimRejuvenator
 git pull
 ```
 
----
+## PowerShell execution policy
 
-# 3 — LIBERAR SCRIPTS NA JANELA ATUAL
-
-Se o PowerShell disser que scripts estão bloqueados:
+If local scripts are blocked, allow them for the current PowerShell process only:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 ```
 
-Isso vale só para a janela atual.
-
----
-
-# 4 — COMPILAR SEM UNITY
-
-Primeiro:
+## Check the environment
 
 ```powershell
 .\check-environment.ps1
 ```
 
-Depois:
+The checker reports whether the direct-assembly build, the official toolchain build, or both are available.
+
+## Build without Unity
 
 ```powershell
 .\build-no-unity.ps1
 ```
 
-O script tenta localizar o Cities: Skylines II automaticamente.
-
-Se o jogo estiver, por exemplo, em:
-
-```text
-D:\SteamLibrary\steamapps\common\Cities Skylines II
-```
-
-rode:
+The script checks common Steam Library locations. For a custom library, set `CSII_GAMEPATH`:
 
 ```powershell
 $env:CSII_GAMEPATH="D:\SteamLibrary\steamapps\common\Cities Skylines II"
 .\build-no-unity.ps1
 ```
 
-O resultado esperado é algo equivalente a:
+The path is valid when this file exists:
 
 ```text
-Build succeeded.
-0 Error(s)
+%CSII_GAMEPATH%\Cities2_Data\Managed\Game.dll
 ```
 
-A DLL pronta deve ficar em:
+The packaged DLL is written to:
 
 ```text
 dist\CimRejuvenator\CimRejuvenator.dll
 ```
 
----
+## Official toolchain build
 
-# 5 — SE A BUILD DER ERRO
-
-Salve o log inteiro:
+If `CSII_TOOLPATH`, `Mod.props`, and `Mod.targets` are installed and available:
 
 ```powershell
-.\build-no-unity.ps1 *> build-error.txt
+.\build.ps1
 ```
 
-O arquivo será criado na pasta do projeto:
+The official toolchain is useful for the standard Cities: Skylines II publishing pipeline. Local direct-assembly builds are sufficient for development testing.
+
+## Copying a Windows build to Linux / Proton
+
+Copy:
 
 ```text
-build-error.txt
+dist\CimRejuvenator\CimRejuvenator.dll
 ```
 
-Erros `CSxxxx` normalmente significam que alguma classe/campo da API do jogo mudou e o código precisa ser atualizado para a versão instalada.
-
----
-
-# 6 — LEVAR PARA O LINUX / PROTON
-
-Você **não precisa mover o save para o Windows**.
-
-Leve apenas:
-
-```text
-dist\CimRejuvenator
-```
-
-para o Linux.
-
-O AppID do Cities: Skylines II é `949230`.
-
-O caminho típico é:
+to the local mod directory in the Proton prefix:
 
 ```text
 ~/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Mods/CimRejuvenator/
 ```
 
-No final precisa existir:
+The final path should be:
 
 ```text
 .../Mods/CimRejuvenator/CimRejuvenator.dll
 ```
 
-Se a pasta `Mods` não existir:
+Do not place local development DLLs under `.cache/Mods/pdx_mods`; that directory is managed by Paradox Mods.
 
-```bash
-mkdir -p "$HOME/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Mods/CimRejuvenator"
-```
+## First v0.3.0 test
 
-Depois copie a DLL para ela.
+Confirm the resident census and rejuvenation system first, then enable the new controllers individually.
 
-> Não coloque a DLL dentro de `.cache/Mods/pdx_mods`. Essa área é usada pelo cache do Paradox Mods.
-
----
-
-# 7 — PRIMEIRO TESTE NO JOGO
-
-Abra o jogo e procure:
+Suggested initial settings:
 
 ```text
-Opções > Mods > Cim Rejuvenator
+Enable Cim Rejuvenator:             Yes
+Enable rejuvenation:                Yes
+Rejuvenation chance:                80%
+Age after rejuvenation:             40
+Maximum rejuvenations/day:          20,000
+Maximum rejuvenations/sweep:        5,000
+Population sweeps/day:              64
+
+Demographic balancer:               No
+Immigration control:                No
+Birth control:                      No
 ```
 
-Na v0.2.0 você deverá encontrar:
+After the census is stable, a reasonable demographic target is:
 
 ```text
-Ativar Cim Rejuvenator
-Chance de rejuvenescimento
-Idade interna após rejuvenescer
-Restaurar saúde mínima
-REJUVENESCER AGORA
-Máximo por dia
-Máximo por varredura
-Manter porcentagem mínima de idosos
-Porcentagem mínima de idosos
-Varreduras automáticas por dia
-Estatísticas
+Child:      15
+Teen:       10
+Adult:      60
+Elderly:    15
 ```
 
-A primeira varredura automática ocorre assim que a simulação começa.
+The four target values are normalized automatically.
 
-O padrão agora é:
+## Build failures
 
-```text
-Chance:                         80%
-Idade:                           40
-Saúde mínima:               ligada
-Máximo por dia:             20.000
-Máximo por varredura:        5.000
-Varreduras por dia:              64
-Proteção mínima de idosos: desligada
+Capture the complete output:
+
+```powershell
+.\build-no-unity.ps1 *> build-error.txt
 ```
 
----
+A `CSxxxx` compiler error usually indicates a game API field, namespace, or type that differs from the version targeted by the source.
 
-# 8 — TESTE AGRESSIVO PARA VER SE FUNCIONA
-
-Se a cidade está com uma quantidade absurda de idosos e você quer apenas confirmar que o mod está funcionando:
-
-```text
-Chance:                    100%
-Máximo por dia:         100.000
-Máximo por varredura:    50.000
-Varreduras por dia:          64
-```
-
-Feche a tela de Opções, despause a cidade e deixe rodar.
-
-Ou pressione:
-
-```text
-REJUVENESCER AGORA
-```
-
-Depois feche as opções e despause.
-
-O botão agenda uma varredura imediata, mas ainda respeita:
-
-- chance;
-- limite por dia;
-- limite por varredura;
-- proteção demográfica.
-
-Se quiser um teste ainda mais extremo, o limite máximo atual é:
-
-```text
-250.000 por dia
-100.000 por varredura
-```
-
-Use isso só por pouco tempo.
-
----
-
-# 9 — PROTEÇÃO DEMOGRÁFICA
-
-Depois de sair da death wave, é melhor evitar transformar praticamente todo idoso em adulto.
-
-Ative:
-
-```text
-Manter porcentagem mínima de idosos: ligado
-Porcentagem mínima de idosos:        15%
-```
-
-O mod calcula quantos idosos podem ser rejuvenescidos sem cair abaixo desse alvo aproximado.
-
----
-
-# 10 — COMO LER AS ESTATÍSTICAS
-
-A interface mostra:
-
-```text
-Cidadãos na última varredura
-Idosos vivos na última varredura
-Porcentagem de idosos
-Rejuvenescidos na última varredura
-Rejuvenescidos hoje
-Rejuvenescidos nesta sessão
-Varreduras nesta sessão
-Último dia de simulação analisado
-```
-
-Se tudo continuar em `0` mesmo com a simulação rodando, confira os logs.
-
-No Linux:
-
-```bash
-grep -RniE "CimRejuvenator|RejuvenationSystem|Exception|ERROR" \
-"$HOME/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Logs" \
-| tail -200
-```
-
-O arquivo próprio do mod normalmente é:
-
-```text
-.../Cities Skylines II/Logs/CimRejuvenator.log
-```
-
-Uma varredura bem-sucedida gera uma linha parecida com:
-
-```text
-Completed automatic rejuvenation sweep: scanned=..., seniors=..., rejuvenated=...
-```
-
-ou:
-
-```text
-Completed manual rejuvenation sweep: ...
-```
-
----
-
-# 11 — ATUALIZAR O MOD
-
-Quando houver código novo, no Windows:
+## Updating
 
 ```powershell
 cd C:\Users\$env:USERNAME\CimRejuvenator
@@ -311,57 +158,4 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\build-no-unity.ps1
 ```
 
-Depois substitua no Linux:
-
-```text
-.../Mods/CimRejuvenator/CimRejuvenator.dll
-```
-
-Feche completamente o Cities: Skylines II antes de substituir a DLL e abra novamente depois.
-
----
-
-# 12 — CONFIGURAÇÃO RECOMENDADA APÓS A CIDADE ESTABILIZAR
-
-Uma configuração mais segura para uso contínuo:
-
-```text
-Chance:                         75–85%
-Idade:                              40
-Saúde mínima:                   ligada
-Máximo por dia:             10k–25k
-Máximo por varredura:        2k–5k
-Varreduras por dia:              64
-Manter idosos mínimos:        ligado
-Mínimo de idosos:             15–20%
-```
-
-A porcentagem ideal depende da cidade; não precisa tentar atingir um número exato.
-
----
-
-# RESUMO ULTRARRÁPIDO
-
-No Windows:
-
-```powershell
-cd C:\Users\$env:USERNAME\CimRejuvenator
-git pull
-Set-ExecutionPolicy -Scope Process Bypass
-$env:CSII_GAMEPATH="D:\SteamLibrary\steamapps\common\Cities Skylines II"
-.\build-no-unity.ps1
-```
-
-Leve:
-
-```text
-dist\CimRejuvenator\CimRejuvenator.dll
-```
-
-para o Linux em:
-
-```text
-.../Cities Skylines II/Mods/CimRejuvenator/
-```
-
-Faça backup do save, abra o jogo e teste.
+Close Cities: Skylines II before replacing a loaded code-mod DLL.
