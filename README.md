@@ -1,130 +1,151 @@
-# Cim Rejuvenator v0.1.2
+# Cim Rejuvenator v0.2.0
 
-> **Status: experimental / first public test build.** Faça backup do save antes de usar. O projeto foi criado para Cities: Skylines II e pode precisar de pequenos ajustes caso a API do jogo mude.
+> **Status: experimental. Faça backup do save antes de usar.** O mod altera diretamente a idade dos cidadãos de Cities: Skylines II.
 
-Mod para **Cities: Skylines II** que transforma uma porcentagem configurável dos cidadãos idosos em adultos novamente, preservando o mesmo cidadão.
+O **Cim Rejuvenator** transforma uma porcentagem configurável dos cidadãos idosos em adultos novamente, preservando o mesmo cidadão.
 
-## 🚀 Comece aqui
+## 🚀 Build sem Unity
 
-Se você vai instalar/compilar no Windows e quer um passo a passo completo, abra:
-
-**[TUTORIAL-WINDOWS.md](TUTORIAL-WINDOWS.md)**
-
-Também existe um modo **SEM Unity / SEM ativação de licença**, pensado para compilar localmente usando diretamente as DLLs instaladas do jogo.
-
-### Build sem Unity
+Para teste local, o projeto pode ser compilado **sem abrir/ativar o Unity Editor**, usando diretamente as DLLs instaladas do jogo:
 
 ```powershell
+git clone https://github.com/decodxr/CimRejuvenator.git
+cd CimRejuvenator
+Set-ExecutionPolicy -Scope Process Bypass
 .\check-environment.ps1
 .\build-no-unity.ps1
 ```
 
-Se o jogo estiver em um caminho diferente do padrão:
+Se o jogo estiver em outro caminho:
 
 ```powershell
 $env:CSII_GAMEPATH="D:\SteamLibrary\steamapps\common\Cities Skylines II"
 .\build-no-unity.ps1
 ```
 
-Esse modo ignora a toolchain oficial e referencia diretamente:
-
-```text
-Cities2_Data\Managed\Game.dll
-Cities2_Data\Managed\Unity.Entities.dll
-Colossal.*.dll
-...
-```
-
-O resultado pronto para copiar fica em:
+A saída fica em:
 
 ```text
 dist\CimRejuvenator\CimRejuvenator.dll
 ```
 
-> Para publicação oficial no Paradox Mods, ainda é melhor usar a toolchain oficial. O fallback sem Unity é para build/teste local.
+Para o tutorial completo, veja **[TUTORIAL-WINDOWS.md](TUTORIAL-WINDOWS.md)**.
 
-## O que o mod faz
+## ✨ Novidades da v0.2.0
+
+- **64 varreduras automáticas por dia** por padrão, configuráveis de 8 a 256.
+- A **primeira varredura acontece assim que a simulação começa**, sem esperar um intervalo inteiro.
+- Botão **REJUVENESCER AGORA** para solicitar uma varredura imediata.
+- Limite diário aumentado para até **250.000** rejuvenescimentos.
+- Novo limite por varredura de até **100.000** para evitar uma mudança gigantesca em um único tick.
+- Proteção demográfica opcional: manter pelo menos uma porcentagem escolhida de idosos.
+- Mais estatísticas: cidadãos analisados, idosos, porcentagem de idosos, rejuvenescidos na última varredura, total do dia, total da sessão e número de varreduras.
+- Logs mais detalhados para diagnosticar se o sistema está realmente executando.
+- Continua suportando o modo de build **sem Unity**.
+
+## Como funciona
 
 - Interface em **Opções > Mods > Cim Rejuvenator**.
-- Slider de **0% a 100%** para chance de rejuvenescimento.
-- O mesmo cidadão volta de idoso para adulto; a ideia é preservar família, casa, educação e identidade.
-- O sorteio não fica se repetindo a cada frame durante o mesmo ciclo de velhice.
-- Se o cidadão rejuvenescido envelhecer novamente no futuro, ele pode participar de um novo sorteio.
-- Redefine a idade interna/data de nascimento para corresponder à idade configurada.
-- Pode restaurar a saúde mínima.
+- Chance de rejuvenescimento de **0% a 100%**.
+- O mesmo cidadão volta de `Elderly` para `Adult`; casa, família, educação e identidade continuam pertencendo à mesma entidade.
+- A data de nascimento interna é reajustada para corresponder à idade escolhida.
+- Pode restaurar a saúde mínima para 80.
 - Cidadãos já mortos não são ressuscitados.
 - Doença e acidente continuam podendo matar.
-- Limite diário evita converter uma cidade inteira de uma vez.
+- O sorteio da porcentagem é estável durante o mesmo ciclo de velhice; um idoso que falhou em 80% não fica ganhando uma nova tentativa a cada frame.
 
-## Configuração inicial recomendada
+## Configuração recomendada
 
-Para uma cidade extremamente envelhecida (~92% idosos):
+Para uma cidade extremamente envelhecida, comece com:
 
-- Chance: **80%**
-- Idade após rejuvenecer: **40**
-- Restaurar saúde: **Ligado**
-- Máximo por dia: **5.000**
-
-Se o desemprego subir demais, reduza o limite para **1.500–2.500/dia**.
-
-Se a onda de mortes continuar muito forte, tente temporariamente **7.500–10.000/dia**.
-
-## Baixar/clonar
-
-```powershell
-git clone https://github.com/decodxr/CimRejuvenator.git
-cd CimRejuvenator
+```text
+Chance de rejuvenescimento:        80%
+Idade depois de rejuvenescer:      40
+Restaurar saúde:                   ligado
+Máximo por dia:                    20.000
+Máximo por varredura:               5.000
+Varreduras automáticas por dia:        64
+Proteção de mínimo de idosos:      desligada durante a recuperação
 ```
 
-## Compilar
+Se quiser fazer um teste agressivo para confirmar que o mod está funcionando:
 
-### Sem Unity (recomendado para teste local)
-
-```powershell
-.\check-environment.ps1
-.\build-no-unity.ps1
+```text
+Chance:                    100%
+Máximo por dia:         100.000
+Máximo por varredura:    50.000 ou 100.000
 ```
 
-### Toolchain oficial
+Depois volte para valores menores para não transformar a economia da cidade inteira de uma vez.
 
-```powershell
-.\check-environment.ps1
-.\build.ps1
+### Proteção demográfica
+
+Você pode ativar:
+
+```text
+Manter porcentagem mínima de idosos: ligado
+Porcentagem mínima de idosos:        15%
 ```
+
+Assim o mod deixa de rejuvenescer quando a cidade se aproxima do percentual configurado.
+
+## Botão REJUVENESCER AGORA
+
+O botão agenda uma varredura para o próximo momento em que a **simulação estiver rodando**. Ele ainda respeita:
+
+- chance de rejuvenescimento;
+- máximo diário;
+- máximo por varredura;
+- proteção de porcentagem mínima de idosos.
+
+Se o jogo estiver pausado ou a tela de Opções tiver pausado a simulação, feche as opções e despause depois de apertar o botão.
 
 ## Windows → Linux / Proton
 
-Depois do build sem Unity, copie a pasta:
+Depois do build, copie:
 
 ```text
 dist\CimRejuvenator
 ```
 
-para o Linux e coloque na pasta de mods do prefixo Proton do Cities: Skylines II, normalmente algo como:
+para:
 
 ```text
 ~/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Mods/CimRejuvenator/
 ```
 
-ou:
+No final deve existir:
 
 ```text
-~/.steam/steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Mods/CimRejuvenator/
+.../Mods/CimRejuvenator/CimRejuvenator.dll
 ```
 
-## Atualizar pelo GitHub
+## Atualizar
 
-Depois de clonar o projeto uma vez:
+No Windows:
 
 ```powershell
-cd C:\CS2Mods\CimRejuvenator
+cd C:\Users\SEU_USUARIO\CimRejuvenator
 git pull
 .\build-no-unity.ps1
 ```
 
-## Aviso importante
+Depois substitua a DLL antiga no Linux pela nova e reinicie o jogo.
 
-**Faça backup do save antes do primeiro teste.** O mod altera componentes de cidadãos em uma simulação existente. Não trate a alteração como perfeitamente reversível.
+## Logs no Linux
+
+Para confirmar que o mod carregou:
+
+```bash
+grep -Rni "CimRejuvenator" \
+"~/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Logs"
+```
+
+O log próprio do mod fica normalmente em:
+
+```text
+.../Cities Skylines II/Logs/CimRejuvenator.log
+```
 
 ## Licença
 
