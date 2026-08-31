@@ -139,7 +139,7 @@ namespace CimRejuvenator
             RunSweep(setting, day, immediate);
         }
 
-        private void RunSweep(Setting setting, int day, bool immediate)
+        private void RunSweep(CimRejuvenatorSetting setting, int day, bool immediate)
         {
             var chance = Clamp(setting.RejuvenationChance, 0, 100);
             var dailyLimit = Clamp(setting.MaxRejuvenationsPerDay, 100, 250000);
