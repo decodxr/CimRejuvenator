@@ -1,32 +1,107 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <OutputType>Library</OutputType>
     <TargetFramework>net48</TargetFramework>
     <AssemblyName>CimRejuvenator</AssemblyName>
     <RootNamespace>CimRejuvenator</RootNamespace>
     <LangVersion>9.0</LangVersion>
     <Configurations>Debug;Release</Configurations>
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
-  <!-- Official Cities: Skylines II modding toolchain. -->
-  <Import Project="$(CSII_TOOLPATH)\Mod.props" />
-  <Import Project="$(CSII_TOOLPATH)\Mod.targets" />
+  <!--
+    Two build modes:
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All" />
+    1) Official toolchain (when CSII_TOOLPATH exists and ForceNoUnityBuild != true)
+       Uses Mod.props / Mod.targets and the normal Cities: Skylines II code-modding pipeline.
+
+    2) No-Unity fallback (ForceNoUnityBuild=true, or no toolchain available)
+       References the DLLs shipped with the installed game directly. This is intended for
+       local compilation/testing and does not require opening/activating the Unity Editor.
+  -->
+  <PropertyGroup>
+    <CsiiToolPath>$(CSII_TOOLPATH)</CsiiToolPath>
+    <CsiiToolPath Condition="'$(CsiiToolPath)' == ''">$([System.Environment]::GetEnvironmentVariable('CSII_TOOLPATH', 'EnvironmentVariableTarget.User'))</CsiiToolPath>
+    <UseCsiiToolchain>false</UseCsiiToolchain>
+    <UseCsiiToolchain Condition="'$(ForceNoUnityBuild)' != 'true' AND '$(CsiiToolPath)' != '' AND Exists('$(CsiiToolPath)\Mod.props') AND Exists('$(CsiiToolPath)\Mod.targets')">true</UseCsiiToolchain>
+  </PropertyGroup>
+
+  <Import Project="$(CsiiToolPath)\Mod.props" Condition="'$(UseCsiiToolchain)' == 'true'" />
+  <Import Project="$(CsiiToolPath)\Mod.targets" Condition="'$(UseCsiiToolchain)' == 'true'" />
+
+  <!-- No-Unity / direct-game-assemblies fallback. -->
+  <PropertyGroup Condition="'$(UseCsiiToolchain)' != 'true'">
+    <CitiesSkylines2Path Condition="'$(CitiesSkylines2Path)' == ''">$(CSII_GAMEPATH)</CitiesSkylines2Path>
+    <CitiesSkylines2Path Condition="'$(CitiesSkylines2Path)' == '' AND Exists('C:\Program Files (x86)\Steam\steamapps\common\Cities Skylines II\Cities2_Data\Managed\Game.dll')">C:\Program Files (x86)\Steam\steamapps\common\Cities Skylines II</CitiesSkylines2Path>
+    <CitiesSkylines2Path Condition="'$(CitiesSkylines2Path)' == '' AND Exists('C:\Program Files\Steam\steamapps\common\Cities Skylines II\Cities2_Data\Managed\Game.dll')">C:\Program Files\Steam\steamapps\common\Cities Skylines II</CitiesSkylines2Path>
+    <CitiesSkylines2Path Condition="'$(CitiesSkylines2Path)' == '' AND Exists('D:\SteamLibrary\steamapps\common\Cities Skylines II\Cities2_Data\Managed\Game.dll')">D:\SteamLibrary\steamapps\common\Cities Skylines II</CitiesSkylines2Path>
+    <ManagedPath>$(CitiesSkylines2Path)\Cities2_Data\Managed</ManagedPath>
+  </PropertyGroup>
+
+  <Target Name="VerifyGamePath" BeforeTargets="BeforeBuild" Condition="'$(UseCsiiToolchain)' != 'true'">
+    <Error Condition="!Exists('$(ManagedPath)\Game.dll')"
+           Text="Cities: Skylines II nao foi encontrado. Defina CSII_GAMEPATH ou passe -p:CitiesSkylines2Path=&quot;C:\caminho\Cities Skylines II&quot;. Esperado: $(ManagedPath)\Game.dll" />
+  </Target>
+
+  <!-- net48 reference assemblies are only needed in fallback mode. -->
+  <ItemGroup Condition="'$(UseCsiiToolchain)' != 'true'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
 
+  <!-- Game assemblies. Mod.props supplies ManagedPath in official mode; fallback sets it above. -->
   <ItemGroup>
-    <Reference Include="Game"><Private>false</Private></Reference>
-    <Reference Include="Colossal.Core"><Private>false</Private></Reference>
-    <Reference Include="Colossal.Logging"><Private>false</Private></Reference>
-    <Reference Include="Colossal.IO.AssetDatabase"><Private>false</Private></Reference>
-    <Reference Include="Colossal.Localization"><Private>false</Private></Reference>
-    <Reference Include="Colossal.UI.Binding"><Private>false</Private></Reference>
-    <Reference Include="UnityEngine.CoreModule"><Private>false</Private></Reference>
-    <Reference Include="Unity.Collections"><Private>false</Private></Reference>
-    <Reference Include="Unity.Entities"><Private>false</Private></Reference>
+    <Reference Include="Game">
+      <HintPath>$(ManagedPath)\Game.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Colossal.Core">
+      <HintPath>$(ManagedPath)\Colossal.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Colossal.Logging">
+      <HintPath>$(ManagedPath)\Colossal.Logging.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Colossal.IO">
+      <HintPath>$(ManagedPath)\Colossal.IO.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Colossal.IO.AssetDatabase">
+      <HintPath>$(ManagedPath)\Colossal.IO.AssetDatabase.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Colossal.Localization">
+      <HintPath>$(ManagedPath)\Colossal.Localization.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Colossal.UI.Binding">
+      <HintPath>$(ManagedPath)\Colossal.UI.Binding.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.Collections">
+      <HintPath>$(ManagedPath)\Unity.Collections.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.Entities">
+      <HintPath>$(ManagedPath)\Unity.Entities.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.Mathematics">
+      <HintPath>$(ManagedPath)\Unity.Mathematics.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.Burst">
+      <HintPath>$(ManagedPath)\Unity.Burst.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(ManagedPath)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
 </Project>
