@@ -2,6 +2,12 @@
 
 Contributions, compatibility reports, and focused bug fixes are welcome.
 
+## License for contributions
+
+By submitting a pull request or other code contribution to this repository, you agree that your contribution may be incorporated into Cim Rejuvenator and distributed under the project's current license: the **Cim Rejuvenator Noncommercial Attribution License 1.0**.
+
+Do not submit code that you do not have the right to contribute. If your contribution includes third-party code, clearly identify its source and license.
+
 ## Before opening an issue
 
 Include the following information when reporting a runtime or build problem:
@@ -35,6 +41,8 @@ For compiler failures, attach or paste the output produced by:
 - Restore modified game parameters when a controller is disabled or destroyed.
 - Document interactions with vanilla systems and known mod conflicts.
 - Avoid adding game assemblies or other proprietary game files to the repository.
+- Preserve `LICENSE` and `NOTICE` in redistributed or modified versions.
+- Clearly mark substantial changes in forks and derivative builds.
 
 ## Testing population changes
 
