@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Replaced the MIT license for current and future distributions with the Cim Rejuvenator Noncommercial Attribution License 1.0.
+- Redistribution and derivative works now require visible credit to Cim Rejuvenator by decodxr and preservation of the project license and notice.
+- Commercial distribution, paid access, sale, and monetization of the software or derivative works are prohibited without prior written permission.
+- Previously distributed MIT copies remain governed by the license that accompanied those copies.
+
 ## 0.3.0
 
 ### Added
