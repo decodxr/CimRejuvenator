@@ -9,6 +9,7 @@ namespace CimRejuvenator
     public sealed class Mod : IMod
     {
         public const string ModId = "CimRejuvenator";
+        public const string Version = "0.2.0";
 
         public static readonly ILog Log = LogManager
             .GetLogger(ModId)
@@ -18,7 +19,7 @@ namespace CimRejuvenator
 
         public void OnLoad(UpdateSystem updateSystem)
         {
-            Log.Info("Loading Cim Rejuvenator v0.1.1");
+            Log.Info($"Loading Cim Rejuvenator v{Version}");
 
             if (GameManager.instance.modManager.TryGetExecutableAsset(this, out var asset))
             {
@@ -33,7 +34,6 @@ namespace CimRejuvenator
 
             AssetDatabase.global.LoadSettings(ModId, Setting, new Setting(this));
 
-            // Run during the game simulation phase.
             updateSystem.UpdateAt<RejuvenationSystem>(SystemUpdatePhase.GameSimulation);
         }
 
