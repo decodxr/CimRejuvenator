@@ -9,7 +9,7 @@ namespace CimRejuvenator
     public sealed class Mod : IMod
     {
         public const string ModId = "CimRejuvenator";
-        public const string Version = "0.2.0";
+        public const string Version = "0.3.0";
 
         public static readonly ILog Log = LogManager
             .GetLogger(ModId)
@@ -30,11 +30,12 @@ namespace CimRejuvenator
             Setting.RegisterInOptionsUI();
 
             GameManager.instance.localizationManager.AddSource("en-US", new LocaleEN(Setting));
-            GameManager.instance.localizationManager.AddSource("pt-BR", new LocalePTBR(Setting));
-
             AssetDatabase.global.LoadSettings(ModId, Setting, new CimRejuvenatorSetting(this));
 
-            updateSystem.UpdateAt<RejuvenationSystem>(SystemUpdatePhase.GameSimulation);
+            updateSystem.UpdateAt<PopulationManagementSystem>(SystemUpdatePhase.GameSimulation);
+            updateSystem.UpdateAt<PopulationFlowSystem>(SystemUpdatePhase.GameSimulation);
+            updateSystem.UpdateAt<BirthRateControlSystem>(SystemUpdatePhase.GameSimulation);
+            updateSystem.UpdateAt<ImmigrationControlSystem>(SystemUpdatePhase.GameSimulation);
         }
 
         public void OnDispose()
