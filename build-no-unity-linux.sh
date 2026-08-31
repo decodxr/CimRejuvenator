@@ -8,13 +8,13 @@ if [[ "${1:-}" == "--deploy" ]]; then
   DEPLOY=true
 fi
 
-echo "=== Cim Rejuvenator - build SEM UNITY no Linux ==="
+echo "=== Cim Rejuvenator - direct assembly build (Linux) ==="
 echo
 
 if ! command -v dotnet >/dev/null 2>&1; then
-  echo "[ERRO] dotnet nao encontrado."
-  echo "No Arch/Caelestia: sudo pacman -S dotnet-sdk"
-  echo "Depois confirme com: dotnet --version"
+  echo "[ERROR] dotnet was not found."
+  echo "Arch Linux: sudo pacman -S dotnet-sdk"
+  echo "Then verify the installation with: dotnet --version"
   exit 1
 fi
 
@@ -39,16 +39,16 @@ for candidate in "${candidates[@]}"; do
 done
 
 if [[ -z "$FOUND" ]]; then
-  echo "[ERRO] Cities: Skylines II nao foi encontrado automaticamente."
-  echo "Defina o caminho manualmente, por exemplo:"
+  echo "[ERROR] Cities: Skylines II was not found automatically."
+  echo "Set CSII_GAMEPATH to the game installation directory, for example:"
   echo 'export CSII_GAMEPATH="$HOME/.local/share/Steam/steamapps/common/Cities Skylines II"'
-  echo "Depois rode novamente: ./build-no-unity-linux.sh"
+  echo "Then run this script again."
   exit 1
 fi
 
-echo "[OK] Jogo encontrado: $FOUND"
+echo "[OK] Game: $FOUND"
 echo "[OK] Assemblies: $FOUND/Cities2_Data/Managed"
-echo "[INFO] Unity/toolchain oficial nao sera usada."
+echo "[INFO] The Unity editor and official modding toolchain are not used by this build."
 echo
 
 export CSII_GAMEPATH="$FOUND"
@@ -66,7 +66,7 @@ else
 fi
 
 if [[ -z "$DLL" || ! -f "$DLL" ]]; then
-  echo "[ERRO] Build terminou, mas CimRejuvenator.dll nao foi localizado."
+  echo "[ERROR] The build completed but CimRejuvenator.dll could not be located."
   exit 1
 fi
 
@@ -75,28 +75,32 @@ mkdir -p "$DIST"
 cp -f "$DLL" "$DIST/CimRejuvenator.dll"
 
 echo
-echo "[OK] BUILD CONCLUIDO"
+echo "[OK] BUILD COMPLETE"
 echo "DLL: $DLL"
-echo "Pacote: $DIST/CimRejuvenator.dll"
+echo "Package: $DIST/CimRejuvenator.dll"
 
 if $DEPLOY; then
-  proton_candidates=(
-    "$HOME/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II"
-    "$HOME/.steam/steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II"
-    "$HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II"
-  )
-
-  USER_DATA=""
-  for candidate in "${proton_candidates[@]}"; do
-    if [[ -d "$candidate" ]]; then
-      USER_DATA="$candidate"
-      break
-    fi
-  done
+  USER_DATA="${CSII_USER_DATA:-}"
 
   if [[ -z "$USER_DATA" ]]; then
-    echo "[ERRO] Prefixo Proton do Cities: Skylines II nao encontrado para deploy automatico."
-    echo "A DLL compilada continua disponivel em: $DIST/CimRejuvenator.dll"
+    proton_candidates=(
+      "$HOME/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II"
+      "$HOME/.steam/steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II"
+      "$HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II"
+    )
+
+    for candidate in "${proton_candidates[@]}"; do
+      if [[ -d "$candidate" ]]; then
+        USER_DATA="$candidate"
+        break
+      fi
+    done
+  fi
+
+  if [[ -z "$USER_DATA" || ! -d "$USER_DATA" ]]; then
+    echo "[ERROR] The Cities: Skylines II Proton user-data directory was not found."
+    echo "Set CSII_USER_DATA to the directory that contains Logs, Mods, and settings."
+    echo "The compiled DLL is still available at: $DIST/CimRejuvenator.dll"
     exit 1
   fi
 
@@ -104,7 +108,7 @@ if $DEPLOY; then
   mkdir -p "$MOD_DIR"
   cp -f "$DIST/CimRejuvenator.dll" "$MOD_DIR/CimRejuvenator.dll"
 
-  echo "[OK] DEPLOY CONCLUIDO"
-  echo "Instalado em: $MOD_DIR/CimRejuvenator.dll"
-  echo "Feche e abra o jogo para carregar a nova DLL."
+  echo "[OK] DEPLOY COMPLETE"
+  echo "Installed at: $MOD_DIR/CimRejuvenator.dll"
+  echo "Restart Cities: Skylines II to load the new DLL."
 fi
