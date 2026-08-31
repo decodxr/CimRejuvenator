@@ -1,6 +1,6 @@
 # TUTORIAL COMPLETO — Cim Rejuvenator no Windows
 
-Este guia foi feito para você conseguir instalar, compilar e testar o mod **sem precisar desta conversa**.
+Este guia foi feito para você conseguir baixar, compilar e testar o mod **sem precisar desta conversa**.
 
 > **IMPORTANTE:** o mod é experimental. Faça backup do save antes do primeiro teste.
 
@@ -17,94 +17,71 @@ Não comece com 100% + limite enorme. Isso pode transformar dezenas de milhares 
 
 ---
 
+# CAMINHO RECOMENDADO: COMPILAR SEM UNITY
+
+Este é o método mais simples para teste local. Ele **não exige ativar licença da Unity** e não precisa abrir o Unity Editor.
+
+O projeto usa diretamente as DLLs já instaladas junto com Cities: Skylines II.
+
+---
+
 # PARTE 1 — Preparar o Windows
 
-## 1. Atualizar Cities: Skylines II
+## 1. Atualizar e localizar Cities: Skylines II
 
-Abra o Steam, atualize o **Cities: Skylines II** e abra o jogo pelo menos uma vez.
+Abra o Steam, atualize **Cities: Skylines II** e abra o jogo pelo menos uma vez.
 
-## 2. Instalar a ferramenta oficial de Code Modding
-
-No Cities: Skylines II, procure a área de **Modding / Code Modding** e instale a toolchain oficial.
-
-Depois que terminar, **feche o jogo**.
-
-A toolchain deve disponibilizar a variável de ambiente:
+O caminho mais comum é:
 
 ```text
-CSII_TOOLPATH
+C:\Program Files (x86)\Steam\steamapps\common\Cities Skylines II
 ```
 
-## 3. Verificar a toolchain
+Mas o jogo pode estar em outra biblioteca, por exemplo:
 
-Abra o **PowerShell** e rode:
-
-```powershell
-$env:CSII_TOOLPATH
+```text
+D:\SteamLibrary\steamapps\common\Cities Skylines II
 ```
 
-Se aparecer um caminho, ótimo.
+Dentro da pasta do jogo deve existir:
 
-Se não aparecer nada:
-
-1. Feche o PowerShell.
-2. Reinicie o Windows.
-3. Abra o Cities: Skylines II novamente.
-4. Confirme que as ferramentas de modding estão instaladas.
-5. Feche o jogo.
-6. Abra um PowerShell novo e teste novamente:
-
-```powershell
-$env:CSII_TOOLPATH
+```text
+Cities2_Data\Managed\Game.dll
 ```
 
-Não remova `Mod.props` nem `Mod.targets` do projeto para tentar contornar esse erro. O projeto depende deles.
+Se `Game.dll` existe ali, esse é o caminho certo.
 
 ---
 
 # PARTE 2 — Instalar o .NET SDK
 
-No PowerShell:
+Abra PowerShell:
 
 ```powershell
 dotnet --version
 ```
 
-Se aparecer uma versão, por exemplo:
+Se aparecer uma versão, pode continuar.
 
-```text
-8.0.xxx
-9.0.xxx
-10.0.xxx
-```
-
-pode continuar.
-
-Se `dotnet` não for reconhecido, abra PowerShell/Terminal como Administrador e rode:
+Se não reconhecer `dotnet`, rode como Administrador:
 
 ```powershell
 winget install Microsoft.DotNet.SDK.10
 ```
 
-Depois feche e abra o terminal novamente e confirme:
-
-```powershell
-dotnet --version
-```
+Depois feche e abra o terminal novamente.
 
 ---
 
-# PARTE 3 — Instalar o Git e baixar o projeto
-
-Instale o Git:
+# PARTE 3 — Instalar Git e baixar o projeto
 
 ```powershell
 winget install Git.Git
 ```
 
-Feche e abra o terminal novamente.
+Depois feche e abra o terminal.
 
-Crie uma pasta simples para seus mods:
+Crie uma pasta:
 
 ```powershell
 cd C:\
@@ -112,47 +89,18 @@ mkdir CS2Mods -ErrorAction SilentlyContinue
 cd C:\CS2Mods
 ```
 
-Clone este repositório:
+Clone:
 
 ```powershell
 git clone https://github.com/decodxr/CimRejuvenator.git
 cd CimRejuvenator
 ```
 
-Como o repositório é público, normalmente não é necessário fazer login para clonar.
-
-Confira os arquivos:
-
-```powershell
-dir
-```
-
-Você deve encontrar pelo menos:
-
-```text
-CimRejuvenator.csproj
-Mod.cs
-Setting.cs
-RejuvenationSystem.cs
-LocalePTBR.cs
-LocaleEN.cs
-build.ps1
-check-environment.ps1
-```
-
-### Se preferir baixar ZIP
-
-Na página do GitHub, use **Code > Download ZIP**, extraia para:
-
-```text
-C:\CS2Mods\CimRejuvenator
-```
-
-Depois abra o PowerShell nessa pasta.
+Ou baixe o ZIP pelo GitHub em **Code > Download ZIP** e extraia.
 
 ---
 
-# PARTE 4 — Verificar o ambiente automaticamente
+# PARTE 4 — Verificar o ambiente
 
 Na pasta do projeto:
 
@@ -160,90 +108,181 @@ Na pasta do projeto:
 .\check-environment.ps1
 ```
 
-O ideal é aparecer algo parecido com:
-
-```text
-[OK] dotnet encontrado
-[OK] CSII_TOOLPATH encontrado
-[OK] Mod.props encontrado
-[OK] Mod.targets encontrado
-Ambiente parece pronto para compilar.
-```
-
-Se houver `[ERRO]`, resolva o item indicado antes de continuar.
-
----
-
-# PARTE 5 — Compilar
-
-Na pasta do projeto:
-
-```powershell
-.\build.ps1
-```
-
-Se o PowerShell bloquear scripts por `ExecutionPolicy`, libere somente para a janela atual:
+Se o PowerShell bloquear scripts:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 ```
 
-Depois rode de novo:
+Depois:
 
 ```powershell
-.\build.ps1
+.\check-environment.ps1
 ```
 
-O resultado que você quer ver é:
+O script tenta localizar o jogo automaticamente.
+
+Se encontrar, deve aparecer algo como:
 
 ```text
-Build succeeded.
+[OK] dotnet encontrado
+[OK] Jogo encontrado para build sem Unity: D:\SteamLibrary\steamapps\common\Cities Skylines II
+Ambiente pronto para pelo menos um modo de compilacao.
 ```
 
-ou uma mensagem equivalente dizendo que a compilação terminou sem erros.
+## Se o jogo NÃO for encontrado
 
-### Se quiser compilar sem o script
+Defina o caminho manualmente. Exemplo:
 
 ```powershell
-dotnet build .\CimRejuvenator.csproj -c Release
+$env:CSII_GAMEPATH="D:\SteamLibrary\steamapps\common\Cities Skylines II"
+```
+
+Confirme:
+
+```powershell
+Test-Path "$env:CSII_GAMEPATH\Cities2_Data\Managed\Game.dll"
+```
+
+Tem que retornar:
+
+```text
+True
+```
+
+Depois rode:
+
+```powershell
+.\check-environment.ps1
 ```
 
 ---
 
-# PARTE 6 — Onde o mod compilado vai parar
+# PARTE 5 — BUILD SEM UNITY
 
-A toolchain do CS2 normalmente faz o deploy do mod para a pasta local de mods.
+Rode:
 
-Abra `Win + R` e cole:
-
-```text
-%USERPROFILE%\AppData\LocalLow\Colossal Order\Cities Skylines II\Mods
+```powershell
+.\build-no-unity.ps1
 ```
 
-Procure por algo relacionado a:
+Esse script força:
 
 ```text
-CimRejuvenator
+ForceNoUnityBuild=true
 ```
 
-O `.dll` também deverá existir na saída de compilação do projeto, normalmente dentro de `bin\Release`.
+Então mesmo que a Code Modding Toolchain esteja instalada e esteja pedindo ativação da Unity, ela é ignorada nesse build.
+
+Internamente o projeto referencia diretamente arquivos como:
+
+```text
+Cities2_Data\Managed\Game.dll
+Cities2_Data\Managed\Colossal.Core.dll
+Cities2_Data\Managed\Colossal.Logging.dll
+Cities2_Data\Managed\Unity.Entities.dll
+Cities2_Data\Managed\Unity.Collections.dll
+...
+```
+
+Se funcionar, você verá:
+
+```text
+BUILD SEM UNITY CONCLUIDO!
+```
+
+O pacote para copiar estará em:
+
+```text
+dist\CimRejuvenator\CimRejuvenator.dll
+```
+
+## Se der erro
+
+Salve tudo em arquivo:
+
+```powershell
+.\build-no-unity.ps1 *> build-error.txt
+```
+
+O `build-error.txt` fica dentro da pasta do projeto.
 
 ---
 
-# PARTE 7 — Primeiro teste no jogo
+# PARTE 6 — LEVAR O MOD PARA O LINUX
+
+Você não precisa mover o save para o Windows. O save continua no Linux.
+
+Leve apenas esta pasta gerada:
+
+```text
+dist\CimRejuvenator
+```
+
+Ela deverá conter:
+
+```text
+CimRejuvenator.dll
+```
+
+Uma forma simples é compactar a pasta em ZIP e enviar para algum lugar acessível pelos dois sistemas, por exemplo GitHub Release, nuvem, pendrive ou rede local.
+
+No Linux/Proton, a pasta de mods costuma estar em um destes caminhos:
+
+```text
+~/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Mods/
+```
+
+ou:
+
+```text
+~/.steam/steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Mods/
+```
+
+Crie:
+
+```text
+Mods/CimRejuvenator/
+```
+
+e coloque dentro:
+
+```text
+CimRejuvenator.dll
+```
+
+Resultado esperado:
+
+```text
+Mods/
+└── CimRejuvenator/
+    └── CimRejuvenator.dll
+```
+
+Se sua Steam Library estiver em outro disco, procure pela pasta:
+
+```text
+steamapps/compatdata/949230/pfx/
+```
+
+`949230` é o AppID do Cities: Skylines II.
+
+---
+
+# PARTE 7 — PRIMEIRO TESTE NO JOGO
 
 ## 1. Faça backup do save
 
-Não teste diretamente na única cópia da sua cidade.
+Não teste na única cópia da cidade.
 
-Use algo assim:
+Use:
 
 ```text
 SAVE ORIGINAL -> guardar
 SAVE TESTE    -> usar com o mod
 ```
 
-## 2. Abra o Cities: Skylines II
+## 2. Abra Cities: Skylines II no Linux
 
 Procure:
 
@@ -251,7 +290,7 @@ Procure:
 Opções > Mods > Cim Rejuvenator
 ```
 
-Configure inicialmente:
+Configure:
 
 ```text
 Ativar mod:                     SIM
@@ -261,9 +300,7 @@ Restaurar saúde:                SIM
 Máximo por dia:                 5000
 ```
 
-Carregue a cidade pausada e só depois deixe a simulação rodar.
-
-Comece em velocidade **1x**.
+Carregue a cidade pausada e comece em velocidade **1x**.
 
 Observe:
 
@@ -274,13 +311,13 @@ Observe:
 - trabalhadores disponíveis;
 - abandono de prédios.
 
-Quando estiver estável, teste 2x. Evite começar direto em 3x.
+Depois de estabilizar, teste 2x.
 
 ---
 
-# PARTE 8 — Como ajustar os valores
+# PARTE 8 — AJUSTAR OS VALORES
 
-## Configuração recomendada
+## Recomendado
 
 ```text
 Chance:       80%
@@ -291,63 +328,49 @@ Saúde:        ligada
 
 ## Se o desemprego explodir
 
-Baixe o limite diário para:
-
 ```text
-1500–2500
+1500–2500 por dia
 ```
 
-Você pode manter a chance em 80%; reduzir o limite diário deixa a correção mais lenta e suave.
+## Se a death wave continuar enorme
 
-## Se ainda estiver acontecendo uma death wave enorme
-
-Temporariamente tente:
+Temporariamente:
 
 ```text
 7500–10000 por dia
 ```
 
-Depois reduza novamente quando a população ficar mais equilibrada.
+Depois reduza novamente.
 
-## Se quiser um modo quase imortal contra velhice
-
-Use:
+## Quase imortal contra velhice
 
 ```text
 Chance: 100%
 ```
 
-Ainda mantenha um limite diário razoável.
+Mesmo assim, mantenha limite diário razoável.
 
-Doenças e acidentes continuam podendo matar. O objetivo do mod é contornar principalmente a morte relacionada ao envelhecimento.
+Doença e acidente ainda podem matar.
 
 ---
 
-# PARTE 9 — Como atualizar o mod depois
+# PARTE 9 — ATUALIZAR O MOD
 
-Se você clonou com Git:
+No Windows:
 
 ```powershell
 cd C:\CS2Mods\CimRejuvenator
 git pull
-.\build.ps1
+.\build-no-unity.ps1
 ```
 
-Depois abra o jogo novamente.
-
-Fluxo:
-
-```text
-GitHub -> git pull -> build.ps1 -> Cities: Skylines II
-```
+Depois substitua no Linux a pasta antiga `CimRejuvenator` pela nova gerada em `dist`.
 
 ---
 
-# PARTE 10 — Erros comuns
+# PARTE 10 — ERROS COMUNS
 
 ## `dotnet` não é reconhecido
-
-Instale:
 
 ```powershell
 winget install Microsoft.DotNet.SDK.10
@@ -355,89 +378,111 @@ winget install Microsoft.DotNet.SDK.10
 
 Feche e abra o terminal.
 
-## `CSII_TOOLPATH` está vazio
+## O jogo não foi encontrado
+
+Descubra a pasta do jogo no Steam:
+
+**Biblioteca > Cities: Skylines II > engrenagem > Gerenciar > Procurar arquivos locais**
+
+Depois use, por exemplo:
+
+```powershell
+$env:CSII_GAMEPATH="D:\SteamLibrary\steamapps\common\Cities Skylines II"
+```
 
 Teste:
 
 ```powershell
-$env:CSII_TOOLPATH
+Test-Path "$env:CSII_GAMEPATH\Cities2_Data\Managed\Game.dll"
 ```
 
-Se não aparecer nada, reinstale/atualize a Code Modding Toolchain do CS2 e reinicie o Windows.
+Deve retornar `True`.
 
-## `Mod.props` não encontrado
+## A toolchain pede ativação da Unity
 
-Teste:
+Não precisa usar a toolchain para o build local deste projeto.
+
+Use:
 
 ```powershell
-Test-Path "$env:CSII_TOOLPATH\Mod.props"
+.\build-no-unity.ps1
 ```
 
-Tem que retornar:
+Esse script força o fallback direto pelas DLLs do jogo.
+
+## Erro `MSB3245` / assembly não encontrado
+
+Confirme primeiro:
+
+```powershell
+Test-Path "$env:CSII_GAMEPATH\Cities2_Data\Managed\Game.dll"
+```
+
+Se for `False`, o caminho está errado.
+
+Se `Game.dll` existe mas alguma outra DLL estiver ausente, salve o log:
+
+```powershell
+.\build-no-unity.ps1 *> build-error.txt
+```
+
+## Erros `CSxxxx`
+
+Salve:
+
+```powershell
+.\build-no-unity.ps1 *> build-error.txt
+```
+
+Atualizações do jogo podem mudar nomes de APIs e exigir ajustes no código.
+
+## Build concluiu mas não achei o DLL
+
+Procure em:
 
 ```text
-True
+dist\CimRejuvenator\CimRejuvenator.dll
 ```
 
-## `Mod.targets` não encontrado
+O script cria essa pasta automaticamente quando a build termina.
 
-```powershell
-Test-Path "$env:CSII_TOOLPATH\Mod.targets"
-```
+## O jogo abre, mas o mod não aparece no Linux
 
-Também deve retornar `True`.
+1. Confirme que `CimRejuvenator.dll` está dentro de `Mods/CimRejuvenator/`.
+2. Reinicie o jogo.
+3. Confirme que code mods estão habilitados.
+4. Procure `CimRejuvenator` nos logs do jogo.
+5. Confirme que você está usando o prefixo Proton correto da instalação atual do CS2.
 
-## Execução de scripts desabilitada
+## O save ficou estranho
 
-Na janela atual:
+Não sobrescreva o save original.
 
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-```
+Saia sem salvar e volte para o backup.
 
-Depois:
+---
+
+# CAMINHO ALTERNATIVO — TOOLCHAIN OFICIAL
+
+Se no futuro você quiser publicar no Paradox Mods, pode usar a toolchain oficial.
+
+Com `CSII_TOOLPATH` configurado:
 
 ```powershell
 .\build.ps1
 ```
 
-## Erros `CSxxxx` de namespace/classe do jogo
+Esse caminho pode envolver Unity/ativação da licença conforme a instalação da ferramenta oficial.
 
-Primeiro rode:
-
-```powershell
-.\check-environment.ps1
-```
-
-Se tudo estiver `[OK]`, salve o erro completo:
+Para **testar localmente**, use preferencialmente:
 
 ```powershell
-.\build.ps1 *> build-error.txt
+.\build-no-unity.ps1
 ```
-
-Isso cria `build-error.txt` na pasta do projeto.
-
-Como o Cities: Skylines II pode mudar sua API em atualizações, esse arquivo é importante para identificar exatamente o que precisa ser adaptado.
-
-## O jogo abre, mas o mod não aparece
-
-1. Confirme que a build terminou sem erros.
-2. Confira a pasta de Mods.
-3. Reinicie o jogo.
-4. Confira se Code Mods estão habilitados.
-5. Procure `CimRejuvenator` nos logs do jogo.
-
-## O save ficou estranho
-
-Não salve por cima do original.
-
-Saia sem sobrescrever e volte para o backup.
 
 ---
 
-# PARTE 11 — Resumo ultrarrápido
-
-No Windows:
+# RESUMO ULTRARRÁPIDO
 
 ```powershell
 winget install Git.Git
@@ -446,15 +491,28 @@ winget install Microsoft.DotNet.SDK.10
 git clone https://github.com/decodxr/CimRejuvenator.git
 cd CimRejuvenator
 
-$env:CSII_TOOLPATH
+Set-ExecutionPolicy -Scope Process Bypass
 .\check-environment.ps1
-.\build.ps1
+.\build-no-unity.ps1
 ```
 
-Depois no jogo:
+Se o jogo estiver em outro disco:
+
+```powershell
+$env:CSII_GAMEPATH="D:\SteamLibrary\steamapps\common\Cities Skylines II"
+.\build-no-unity.ps1
+```
+
+Depois copie:
+
+```text
+dist\CimRejuvenator
+```
+
+para a pasta de mods do CS2 no Linux/Proton.
+
+No jogo, comece com:
 
 ```text
 80% / idade 40 / saúde ligada / 5000 por dia
 ```
-
-Comece em 1x, acompanhe idosos, adultos e desemprego, e só depois aumente a velocidade.
