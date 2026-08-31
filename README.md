@@ -4,9 +4,33 @@
 
 O **Cim Rejuvenator** transforma uma porcentagem configurável dos cidadãos idosos em adultos novamente, preservando o mesmo cidadão.
 
-## 🚀 Build sem Unity
+## 🚀 Tutoriais
 
-Para teste local, o projeto pode ser compilado **sem abrir/ativar o Unity Editor**, usando diretamente as DLLs instaladas do jogo:
+- **Windows:** [TUTORIAL-WINDOWS.md](TUTORIAL-WINDOWS.md)
+- **Linux / Proton:** [TUTORIAL-LINUX.md](TUTORIAL-LINUX.md)
+
+A v0.2.0 também pode ser **compilada diretamente no Linux**, sem Unity e sem precisar voltar ao Windows.
+
+### Linux — build + deploy automático
+
+```bash
+sudo pacman -S git dotnet-sdk
+cd ~
+git clone https://github.com/decodxr/CimRejuvenator.git
+cd CimRejuvenator
+chmod +x build-no-unity-linux.sh
+./build-no-unity-linux.sh --deploy
+```
+
+Nas atualizações seguintes:
+
+```bash
+cd ~/CimRejuvenator
+git pull
+./build-no-unity-linux.sh --deploy
+```
+
+### Windows — build sem Unity
 
 ```powershell
 git clone https://github.com/decodxr/CimRejuvenator.git
@@ -29,8 +53,6 @@ A saída fica em:
 dist\CimRejuvenator\CimRejuvenator.dll
 ```
 
-Para o tutorial completo, veja **[TUTORIAL-WINDOWS.md](TUTORIAL-WINDOWS.md)**.
-
 ## ✨ Novidades da v0.2.0
 
 - **64 varreduras automáticas por dia** por padrão, configuráveis de 8 a 256.
@@ -41,7 +63,8 @@ Para o tutorial completo, veja **[TUTORIAL-WINDOWS.md](TUTORIAL-WINDOWS.md)**.
 - Proteção demográfica opcional: manter pelo menos uma porcentagem escolhida de idosos.
 - Mais estatísticas: cidadãos analisados, idosos, porcentagem de idosos, rejuvenescidos na última varredura, total do dia, total da sessão e número de varreduras.
 - Logs mais detalhados para diagnosticar se o sistema está realmente executando.
-- Continua suportando o modo de build **sem Unity**.
+- Classe de configurações com nome exclusivo para reduzir risco de conflito com outros code mods.
+- Build direto no **Linux + deploy automático no prefixo Proton**.
 
 ## Como funciona
 
@@ -102,7 +125,7 @@ Se o jogo estiver pausado ou a tela de Opções tiver pausado a simulação, fec
 
 ## Windows → Linux / Proton
 
-Depois do build, copie:
+Depois do build no Windows, copie:
 
 ```text
 dist\CimRejuvenator
@@ -120,25 +143,14 @@ No final deve existir:
 .../Mods/CimRejuvenator/CimRejuvenator.dll
 ```
 
-## Atualizar
-
-No Windows:
-
-```powershell
-cd C:\Users\SEU_USUARIO\CimRejuvenator
-git pull
-.\build-no-unity.ps1
-```
-
-Depois substitua a DLL antiga no Linux pela nova e reinicie o jogo.
-
 ## Logs no Linux
 
 Para confirmar que o mod carregou:
 
 ```bash
 grep -Rni "CimRejuvenator" \
-"~/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Logs"
+"$HOME/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Logs" \
+| tail -100
 ```
 
 O log próprio do mod fica normalmente em:
