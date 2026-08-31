@@ -1,4 +1,4 @@
-# Cim Rejuvenator v0.1.1
+# Cim Rejuvenator v0.1.2
 
 > **Status: experimental / first public test build.** Faça backup do save antes de usar. O projeto foi criado para Cities: Skylines II e pode precisar de pequenos ajustes caso a API do jogo mude.
 
@@ -10,15 +10,38 @@ Se você vai instalar/compilar no Windows e quer um passo a passo completo, abra
 
 **[TUTORIAL-WINDOWS.md](TUTORIAL-WINDOWS.md)**
 
-Ele inclui preparação do Windows, toolchain, .NET, Git, compilação, instalação, configuração no jogo e solução de erros comuns.
+Também existe um modo **SEM Unity / SEM ativação de licença**, pensado para compilar localmente usando diretamente as DLLs instaladas do jogo.
 
-Também existe o script:
+### Build sem Unity
 
 ```powershell
 .\check-environment.ps1
+.\build-no-unity.ps1
 ```
 
-para conferir automaticamente se o PC está pronto para compilar.
+Se o jogo estiver em um caminho diferente do padrão:
+
+```powershell
+$env:CSII_GAMEPATH="D:\SteamLibrary\steamapps\common\Cities Skylines II"
+.\build-no-unity.ps1
+```
+
+Esse modo ignora a toolchain oficial e referencia diretamente:
+
+```text
+Cities2_Data\Managed\Game.dll
+Cities2_Data\Managed\Unity.Entities.dll
+Colossal.*.dll
+...
+```
+
+O resultado pronto para copiar fica em:
+
+```text
+dist\CimRejuvenator\CimRejuvenator.dll
+```
+
+> Para publicação oficial no Paradox Mods, ainda é melhor usar a toolchain oficial. O fallback sem Unity é para build/teste local.
 
 ## O que o mod faz
 
@@ -55,25 +78,39 @@ cd CimRejuvenator
 
 ## Compilar
 
-Primeiro:
+### Sem Unity (recomendado para teste local)
 
 ```powershell
 .\check-environment.ps1
+.\build-no-unity.ps1
 ```
 
-Depois:
+### Toolchain oficial
 
 ```powershell
+.\check-environment.ps1
 .\build.ps1
 ```
 
-Ou diretamente:
+## Windows → Linux / Proton
 
-```powershell
-dotnet build .\CimRejuvenator.csproj -c Release
+Depois do build sem Unity, copie a pasta:
+
+```text
+dist\CimRejuvenator
 ```
 
-O projeto depende da toolchain oficial de Code Modding do Cities: Skylines II e da variável `CSII_TOOLPATH`.
+para o Linux e coloque na pasta de mods do prefixo Proton do Cities: Skylines II, normalmente algo como:
+
+```text
+~/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Mods/CimRejuvenator/
+```
+
+ou:
+
+```text
+~/.steam/steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Mods/CimRejuvenator/
+```
 
 ## Atualizar pelo GitHub
 
@@ -82,7 +119,7 @@ Depois de clonar o projeto uma vez:
 ```powershell
 cd C:\CS2Mods\CimRejuvenator
 git pull
-.\build.ps1
+.\build-no-unity.ps1
 ```
 
 ## Aviso importante
