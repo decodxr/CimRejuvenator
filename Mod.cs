@@ -15,7 +15,7 @@ namespace CimRejuvenator
             .GetLogger(ModId)
             .SetShowsErrorsInUI(false);
 
-        public static Setting Setting { get; private set; }
+        public static CimRejuvenatorSetting Setting { get; private set; }
 
         public void OnLoad(UpdateSystem updateSystem)
         {
@@ -26,13 +26,13 @@ namespace CimRejuvenator
                 Log.Info($"Loaded from {asset.path}");
             }
 
-            Setting = new Setting(this);
+            Setting = new CimRejuvenatorSetting(this);
             Setting.RegisterInOptionsUI();
 
             GameManager.instance.localizationManager.AddSource("en-US", new LocaleEN(Setting));
             GameManager.instance.localizationManager.AddSource("pt-BR", new LocalePTBR(Setting));
 
-            AssetDatabase.global.LoadSettings(ModId, Setting, new Setting(this));
+            AssetDatabase.global.LoadSettings(ModId, Setting, new CimRejuvenatorSetting(this));
 
             updateSystem.UpdateAt<RejuvenationSystem>(SystemUpdatePhase.GameSimulation);
         }
