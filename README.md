@@ -203,4 +203,16 @@ grep -RniE "CimRejuvenator|PopulationManagementSystem|Exception|ERROR" \
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Cim Rejuvenator is **source-available for noncommercial use** under the [Cim Rejuvenator Noncommercial Attribution License 1.0](LICENSE).
+
+You may use, study, modify, fork, and redistribute the project for noncommercial purposes. Redistribution and derivative works must keep the license, credit **Cim Rejuvenator by decodxr**, link to the original repository when links are supported, and clearly identify modifications.
+
+Selling the mod or a derivative, charging for access or downloads, placing it behind a paid tier, or otherwise monetizing distribution of code derived from this project is not permitted without prior written permission from the copyright holder.
+
+Ordinary monetized videos, livestreams, reviews, screenshots, and tutorials that merely feature the mod are allowed as long as access to the software itself remains free.
+
+Because commercial use is restricted, this project should be described as **source-available**, not OSI Open Source.
+
+### Earlier MIT copies
+
+The license change is not retroactive. Copies that were already distributed under MIT remain under the MIT license that accompanied those copies. Current and future copies distributed with the new `LICENSE` file use the noncommercial attribution terms.
