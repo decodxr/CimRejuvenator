@@ -1,18 +1,18 @@
 $ErrorActionPreference = "Continue"
 
-Write-Host "=== Cim Rejuvenator - verificador de ambiente ==="
+Write-Host "=== Cim Rejuvenator - environment check ==="
 Write-Host ""
 
 $ok = $true
 
 $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
 if ($null -eq $dotnet) {
-    Write-Host "[ERRO] dotnet nao foi encontrado." -ForegroundColor Red
-    Write-Host "       Instale com: winget install Microsoft.DotNet.SDK.10"
+    Write-Host "[ERROR] dotnet was not found." -ForegroundColor Red
+    Write-Host "        Install it with: winget install Microsoft.DotNet.SDK.10"
     $ok = $false
 } else {
     $version = dotnet --version
-    Write-Host "[OK] dotnet encontrado: $version" -ForegroundColor Green
+    Write-Host "[OK] dotnet: $version" -ForegroundColor Green
 }
 
 $toolchainReady = $false
@@ -21,12 +21,12 @@ if (-not [string]::IsNullOrWhiteSpace($env:CSII_TOOLPATH)) {
     $targets = Join-Path $env:CSII_TOOLPATH "Mod.targets"
     if ((Test-Path $props) -and (Test-Path $targets)) {
         $toolchainReady = $true
-        Write-Host "[OK] Toolchain oficial encontrada em: $env:CSII_TOOLPATH" -ForegroundColor Green
+        Write-Host "[OK] Official toolchain: $env:CSII_TOOLPATH" -ForegroundColor Green
     }
 }
 
 if (-not $toolchainReady) {
-    Write-Host "[INFO] Toolchain oficial nao esta pronta. Isso NAO impede o build sem Unity." -ForegroundColor Cyan
+    Write-Host "[INFO] The official toolchain is not ready. Direct-assembly builds can still work." -ForegroundColor Cyan
 }
 
 $gamePath = $env:CSII_GAMEPATH
@@ -47,23 +47,23 @@ foreach ($candidate in $candidates) {
 }
 
 if ($null -ne $gameFound) {
-    Write-Host "[OK] Jogo encontrado para build sem Unity: $gameFound" -ForegroundColor Green
+    Write-Host "[OK] Game found for direct-assembly build: $gameFound" -ForegroundColor Green
 } else {
-    Write-Host "[AVISO] Jogo nao foi localizado automaticamente para o build sem Unity." -ForegroundColor Yellow
-    Write-Host '        Se estiver em outra unidade, defina: $env:CSII_GAMEPATH="CAMINHO_DO_JOGO"'
+    Write-Host "[WARNING] The game was not found automatically." -ForegroundColor Yellow
+    Write-Host '          If it is installed in another library, set: $env:CSII_GAMEPATH="GAME_PATH"'
 }
 
 Write-Host ""
 if ($ok -and ($toolchainReady -or $null -ne $gameFound)) {
-    Write-Host "Ambiente pronto para pelo menos um modo de compilacao." -ForegroundColor Green
+    Write-Host "At least one build mode is ready." -ForegroundColor Green
     if ($toolchainReady) {
-        Write-Host "  Oficial: .\build.ps1"
+        Write-Host "  Official toolchain: .\build.ps1"
     }
     if ($null -ne $gameFound) {
-        Write-Host "  Sem Unity: .\build-no-unity.ps1"
+        Write-Host "  Direct assemblies:  .\build-no-unity.ps1"
     }
     exit 0
-} else {
-    Write-Host "Ainda falta o .NET ou o caminho do jogo/toolchain." -ForegroundColor Yellow
-    exit 1
 }
+
+Write-Host "The environment is missing the .NET SDK, the game path, or the official toolchain." -ForegroundColor Yellow
+exit 1
