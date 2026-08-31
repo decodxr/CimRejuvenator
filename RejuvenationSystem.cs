@@ -1,3 +1,5 @@
+using System;
+using System.Threading;
 using Game;
 using Game.Citizens;
 using Game.Common;
@@ -15,22 +17,52 @@ namespace CimRejuvenator
     public partial class RejuvenationSystem : GameSystemBase
     {
         public const int FramesPerDay = 262144;
-        public const int SweepsPerDay = 8;
+
+        // The system wakes up frequently so a manual "Rejuvenate now" request is handled quickly.
+        // Full population scans are still throttled by the user's SweepsPerDay setting.
+        public const int SchedulerChecksPerDay = 512;
 
         public static int SeniorsLastScan { get; private set; }
+        public static int CitizensLastScan { get; private set; }
+        public static int RejuvenatedLastSweep { get; private set; }
         public static int RejuvenatedToday { get; private set; }
         public static int RejuvenatedSession { get; private set; }
+        public static int SweepsSession { get; private set; }
+        public static int LastSimulationDay { get; private set; } = -1;
+
+        private static int s_ImmediateSweepRequested;
 
         private SimulationSystem m_SimulationSystem;
         private EntityQuery m_CitizenQuery;
         private EntityQuery m_TimeDataQuery;
         private int m_CurrentDay = int.MinValue;
+        private uint m_LastSweepFrame;
+        private bool m_HasSwept;
+
+        public static double ElderlyPercentLastScan
+        {
+            get
+            {
+                return CitizensLastScan <= 0
+                    ? 0.0
+                    : SeniorsLastScan * 100.0 / CitizensLastScan;
+            }
+        }
+
+        public static void RequestImmediateSweep()
+        {
+            Interlocked.Exchange(ref s_ImmediateSweepRequested, 1);
+        }
 
         public static void ResetStatistics()
         {
             SeniorsLastScan = 0;
+            CitizensLastScan = 0;
+            RejuvenatedLastSweep = 0;
             RejuvenatedToday = 0;
             RejuvenatedSession = 0;
+            SweepsSession = 0;
+            LastSimulationDay = -1;
         }
 
         protected override void OnCreate()
@@ -55,11 +87,15 @@ namespace CimRejuvenator
             m_TimeDataQuery = GetEntityQuery(ComponentType.ReadOnly<TimeData>());
             RequireForUpdate(m_CitizenQuery);
             RequireForUpdate(m_TimeDataQuery);
+
+            Mod.Log.Info(
+                "RejuvenationSystem created. Scheduler checks: " +
+                $"{SchedulerChecksPerDay}/day; first sweep will run as soon as simulation updates.");
         }
 
         public override int GetUpdateInterval(SystemUpdatePhase phase)
         {
-            return FramesPerDay / SweepsPerDay;
+            return Math.Max(1, FramesPerDay / SchedulerChecksPerDay);
         }
 
         protected override void OnUpdate()
@@ -70,14 +106,9 @@ namespace CimRejuvenator
                 return;
             }
 
-            var chance = Clamp(setting.RejuvenationChance, 0, 100);
-            if (chance <= 0)
-            {
-                return;
-            }
-
+            var frame = m_SimulationSystem.frameIndex;
             var timeData = m_TimeDataQuery.GetSingleton<TimeData>();
-            var day = TimeSystem.GetDay(m_SimulationSystem.frameIndex, timeData);
+            var day = TimeSystem.GetDay(frame, timeData);
 
             if (day != m_CurrentDay)
             {
@@ -85,15 +116,43 @@ namespace CimRejuvenator
                 RejuvenatedToday = 0;
             }
 
-            var dailyLimit = Clamp(setting.MaxRejuvenationsPerDay, 100, 20000);
-            var remainingToday = dailyLimit - RejuvenatedToday;
+            // Loading an older save can move the simulation frame backwards.
+            if (m_HasSwept && frame < m_LastSweepFrame)
+            {
+                m_HasSwept = false;
+                m_LastSweepFrame = frame;
+                RejuvenatedToday = 0;
+            }
+
+            var immediate = Interlocked.Exchange(ref s_ImmediateSweepRequested, 0) != 0;
+            var sweepsPerDay = Clamp(setting.SweepsPerDay, 1, 256);
+            var sweepInterval = (uint)Math.Max(1, FramesPerDay / sweepsPerDay);
+
+            // First scan happens immediately after the simulation begins.
+            if (!immediate && m_HasSwept && frame - m_LastSweepFrame < sweepInterval)
+            {
+                return;
+            }
+
+            m_HasSwept = true;
+            m_LastSweepFrame = frame;
+            RunSweep(setting, day, immediate);
+        }
+
+        private void RunSweep(Setting setting, int day, bool immediate)
+        {
+            var chance = Clamp(setting.RejuvenationChance, 0, 100);
+            var dailyLimit = Clamp(setting.MaxRejuvenationsPerDay, 100, 250000);
+            var perSweepLimit = Clamp(setting.MaxRejuvenationsPerSweep, 100, 100000);
+            var remainingToday = Math.Max(0, dailyLimit - RejuvenatedToday);
 
             var entities = m_CitizenQuery.ToEntityArray(Allocator.Temp);
             var citizens = m_CitizenQuery.ToComponentDataArray<Citizen>(Allocator.Temp);
 
             var seniorCount = 0;
-            var rejuvenatedThisSweep = 0;
+            var citizenCount = entities.Length;
 
+            // Pass 1: get the current elderly count before changing anybody.
             for (var i = 0; i < entities.Length; i++)
             {
                 var citizen = citizens[i];
@@ -102,69 +161,97 @@ namespace CimRejuvenator
                     continue;
                 }
 
-                var entity = entities[i];
-
-                if (EntityManager.HasComponent<HealthProblem>(entity))
+                if (IsDead(entities[i]))
                 {
-                    var problem = EntityManager.GetComponentData<HealthProblem>(entity);
-                    if ((problem.m_Flags & HealthProblemFlags.Dead) != 0)
-                    {
-                        continue;
-                    }
+                    continue;
                 }
 
                 seniorCount++;
-
-                if (!PassesChance(entity, citizen.m_BirthDay, chance))
-                {
-                    continue;
-                }
-
-                if (remainingToday <= 0)
-                {
-                    continue;
-                }
-
-                var resetAge = Clamp(setting.ResetAgeDays, 36, 70);
-
-                citizen.SetAge(CitizenAge.Adult);
-
-                // Current game builds store m_BirthDay as a 16-bit integer.
-                // Clamp before casting so a very long-running save cannot overflow it.
-                var newBirthDay = Clamp(day - resetAge, short.MinValue, short.MaxValue);
-                citizen.m_BirthDay = (short)newBirthDay;
-
-                // Older game/mod code used CitizenFlags.NeedsNewJob here. That flag no longer
-                // exists in current builds. Job seeking is now represented by Game.Agents
-                // HasJobSeeker / JobSeeker components, so we deliberately avoid writing an
-                // obsolete CitizenFlags value. The base game can create job-seeker state for
-                // unemployed adults; a dedicated explicit seeker path can be added after the
-                // first runtime test if needed.
-
-                if (setting.RestoreHealth && citizen.m_Health < 80)
-                {
-                    citizen.m_Health = 80;
-                }
-
-                EntityManager.SetComponentData(entity, citizen);
-
-                remainingToday--;
-                RejuvenatedToday++;
-                RejuvenatedSession++;
-                rejuvenatedThisSweep++;
             }
 
             SeniorsLastScan = seniorCount;
+            CitizensLastScan = citizenCount;
+            RejuvenatedLastSweep = 0;
+            LastSimulationDay = day;
+            SweepsSession++;
+
+            var demographicAllowance = seniorCount;
+            if (setting.KeepMinimumSeniorShare && citizenCount > 0)
+            {
+                var targetPercent = Clamp(setting.MinimumSeniorPercent, 0, 50);
+                var minimumSeniors = (int)Math.Ceiling(citizenCount * (targetPercent / 100.0));
+                demographicAllowance = Math.Max(0, seniorCount - minimumSeniors);
+            }
+
+            var sweepBudget = Math.Min(perSweepLimit, remainingToday);
+            sweepBudget = Math.Min(sweepBudget, demographicAllowance);
+
+            if (chance > 0 && sweepBudget > 0)
+            {
+                var resetAge = Clamp(setting.ResetAgeDays, 36, 70);
+
+                // Pass 2: apply rejuvenation up to the configured budget.
+                for (var i = 0; i < entities.Length && sweepBudget > 0; i++)
+                {
+                    var citizen = citizens[i];
+                    if (citizen.GetAge() != CitizenAge.Elderly)
+                    {
+                        continue;
+                    }
+
+                    var entity = entities[i];
+                    if (IsDead(entity))
+                    {
+                        continue;
+                    }
+
+                    if (!PassesChance(entity, citizen.m_BirthDay, chance))
+                    {
+                        continue;
+                    }
+
+                    citizen.SetAge(CitizenAge.Adult);
+
+                    // Current game builds store m_BirthDay as a 16-bit integer.
+                    // Clamp before casting so very long-running saves cannot overflow it.
+                    var newBirthDay = Clamp(day - resetAge, short.MinValue, short.MaxValue);
+                    citizen.m_BirthDay = (short)newBirthDay;
+
+                    if (setting.RestoreHealth && citizen.m_Health < 80)
+                    {
+                        citizen.m_Health = 80;
+                    }
+
+                    EntityManager.SetComponentData(entity, citizen);
+
+                    sweepBudget--;
+                    RejuvenatedToday++;
+                    RejuvenatedSession++;
+                    RejuvenatedLastSweep++;
+                }
+            }
 
             citizens.Dispose();
             entities.Dispose();
 
-            if (rejuvenatedThisSweep > 0)
+            var mode = immediate ? "manual" : "automatic";
+            Mod.Log.Info(
+                $"Completed {mode} rejuvenation sweep: " +
+                $"scanned={CitizensLastScan}, seniors={SeniorsLastScan} " +
+                $"({ElderlyPercentLastScan:F1}%), rejuvenated={RejuvenatedLastSweep}, " +
+                $"today={RejuvenatedToday}/{dailyLimit}, session={RejuvenatedSession}."
+            );
+        }
+
+        private bool IsDead(Entity entity)
+        {
+            if (!EntityManager.HasComponent<HealthProblem>(entity))
             {
-                Mod.Log.Info(
-                    $"Rejuvenated {rejuvenatedThisSweep} cim(s) this sweep. " +
-                    $"Today: {RejuvenatedToday}/{dailyLimit}; session: {RejuvenatedSession}.");
+                return false;
             }
+
+            var problem = EntityManager.GetComponentData<HealthProblem>(entity);
+            return (problem.m_Flags & HealthProblemFlags.Dead) != 0;
         }
 
         private static bool PassesChance(Entity entity, int birthDay, int chance)
