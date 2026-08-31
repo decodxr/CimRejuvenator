@@ -1,21 +1,61 @@
-MIT License
+Cim Rejuvenator Noncommercial Attribution License 1.0
 
 Copyright (c) 2026 decodxr
+All rights reserved except as expressly granted below.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. Permission
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Permission is granted, free of charge, to use, study, copy, modify, and redistribute Cim Rejuvenator, in source or binary form, solely for noncommercial purposes and subject to the conditions of this license.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. Attribution
+
+Any copy, redistribution, fork, port, adaptation, or other derivative work must:
+
+- retain this LICENSE file and the copyright notice above;
+- clearly credit "Cim Rejuvenator by decodxr" in its README, project page, mod listing, or other primary distribution page;
+- include a link to the original project when the distribution medium supports links: https://github.com/decodxr/CimRejuvenator;
+- clearly state when the software has been modified from the original project; and
+- retain the NOTICE file when one is distributed with the software.
+
+The required credit must not imply endorsement of the modified project by the original author.
+
+3. Noncommercial use only
+
+The software and derivative works may not be sold, licensed for a fee, paywalled, rented, or otherwise provided in exchange for money or other compensation.
+
+Without prior written permission from the copyright holder, you may not:
+
+- sell the original software or a modified version;
+- charge for downloads, access, updates, support, or activation;
+- place the software or a derivative work behind a subscription, membership, paid tier, or other paywall;
+- include the software or a derivative work as a material part of a paid product, paid mod pack, or paid service;
+- receive advertising, sponsorship, affiliate, or other revenue specifically in exchange for distributing or providing access to the software or a derivative work; or
+- use the software or a derivative work as the product or service being commercially exploited.
+
+Ordinary monetized videos, livestreams, screenshots, reviews, tutorials, or other media that merely feature the mod are allowed, provided access to the software itself remains free and the media does not redistribute the software under paid or restricted access.
+
+4. Derivative works
+
+Derivative works may be modified and redistributed only under this same license. You may not remove the noncommercial restriction or replace this license with terms that permit commercial exploitation of code derived from this project.
+
+Independent code that merely interoperates with Cim Rejuvenator is not automatically a derivative work and is not covered by this license solely because of interoperability.
+
+5. Separate permission
+
+The copyright holder may grant separate written permission for uses that are otherwise prohibited by this license. Such permission applies only to the person or entity and use specifically authorized in writing.
+
+6. No trademark rights
+
+This license does not grant permission to use the project name, logos, or other branding in a way that suggests an official release, sponsorship, or endorsement. Accurate attribution and factual references to the project name are permitted.
+
+7. Termination
+
+Your rights under this license terminate if you violate its conditions. If the violation is fully corrected within 30 days after written notice from the copyright holder, the license may be reinstated at the copyright holder's discretion.
+
+8. No warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM THE SOFTWARE OR ITS USE.
+
+9. Earlier releases
+
+A copy that was previously distributed under a different license remains governed by the license that accompanied that copy. This license applies to copies distributed with this LICENSE file and does not retroactively revoke rights already granted under earlier licenses.
