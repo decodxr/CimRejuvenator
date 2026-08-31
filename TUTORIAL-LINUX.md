@@ -1,33 +1,25 @@
-# TUTORIAL LINUX — Cim Rejuvenator v0.2.0
+# Linux / Proton Build and Install Guide
 
-Agora o Cim Rejuvenator pode ser **compilado diretamente no Linux**, sem Unity e sem precisar voltar ao Windows.
+This guide covers local development builds of Cim Rejuvenator on Linux. The direct-assembly build references the DLLs shipped with Cities: Skylines II and does not require the Unity editor or Unity license activation.
 
-O script usa as DLLs da instalação do Cities: Skylines II e pode copiar a DLL pronta diretamente para o prefixo Proton.
+> Back up important saves before testing a new development build.
 
-> Faça backup do save antes de testar uma versão nova.
+## Requirements
 
----
-
-## 1 — Instalar Git e .NET SDK
-
-### Arch / Caelestia
+On Arch Linux:
 
 ```bash
 sudo pacman -S git dotnet-sdk
 ```
 
-Confirme:
+Verify both tools:
 
 ```bash
 git --version
 dotnet --version
 ```
 
----
-
-## 2 — Clonar ou atualizar o projeto
-
-Primeira vez:
+## Clone the repository
 
 ```bash
 cd ~
@@ -35,153 +27,140 @@ git clone https://github.com/decodxr/CimRejuvenator.git
 cd CimRejuvenator
 ```
 
-Se já clonou:
+For an existing checkout:
 
 ```bash
 cd ~/CimRejuvenator
 git pull
 ```
 
----
+## Build
 
-## 3 — Tornar o script executável
+Make the build script executable once:
 
 ```bash
 chmod +x build-no-unity-linux.sh
 ```
 
----
-
-## 4 — Build simples
+Build the DLL:
 
 ```bash
 ./build-no-unity-linux.sh
 ```
 
-O script tenta encontrar automaticamente o jogo nestes locais comuns:
-
-```text
-~/.local/share/Steam/steamapps/common/Cities Skylines II
-~/.steam/steam/steamapps/common/Cities Skylines II
-Steam Flatpak
-```
-
-Se o jogo estiver em outra Steam Library:
-
-```bash
-export CSII_GAMEPATH="/caminho/para/steamapps/common/Cities Skylines II"
-./build-no-unity-linux.sh
-```
-
-A DLL pronta fica em:
+The output is copied to:
 
 ```text
 dist/CimRejuvenator/CimRejuvenator.dll
 ```
 
----
+### Custom game path
 
-## 5 — Build + instalação automática no Proton
+The script checks common Steam locations automatically. For a custom Steam Library, set `CSII_GAMEPATH` to the directory containing `Cities2_Data`:
 
-Com o Cities: Skylines II **fechado**, rode:
+```bash
+export CSII_GAMEPATH="/path/to/steamapps/common/Cities Skylines II"
+./build-no-unity-linux.sh
+```
+
+The path is valid when this file exists:
+
+```text
+$CSII_GAMEPATH/Cities2_Data/Managed/Game.dll
+```
+
+## Build and deploy to Proton
+
+Close Cities: Skylines II before replacing a loaded code-mod DLL.
 
 ```bash
 ./build-no-unity-linux.sh --deploy
 ```
 
-O script compila e tenta copiar automaticamente para:
+The script checks common Proton prefixes for Steam AppID `949230` and installs the DLL under:
 
 ```text
-~/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Mods/CimRejuvenator/CimRejuvenator.dll
+.../Cities Skylines II/Mods/CimRejuvenator/CimRejuvenator.dll
 ```
 
-Depois é só abrir o jogo.
+### Custom Proton user-data path
 
----
-
-## 6 — Confirmar que carregou
+If the prefix is in a custom location, set `CSII_USER_DATA` to the directory containing the game's `Logs`, settings, and local `Mods` directory:
 
 ```bash
-grep -Rni "CimRejuvenator" \
-"$HOME/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Logs" \
-| tail -100
+export CSII_USER_DATA="/path/to/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II"
+./build-no-unity-linux.sh --deploy
 ```
 
-O log próprio normalmente fica em:
+Do not install local development DLLs under `.cache/Mods/pdx_mods`; that directory is managed by Paradox Mods.
+
+## First v0.3.0 test
+
+Start with population control features disabled except rejuvenation. Confirm the population census updates before enabling the new controllers.
+
+Suggested first test:
+
+```text
+Enable Cim Rejuvenator:             Yes
+Enable rejuvenation:                Yes
+Rejuvenation chance:                80%
+Maximum rejuvenations/day:          20,000
+Maximum rejuvenations/sweep:        5,000
+Population sweeps/day:              64
+
+Demographic balancer:               No
+Immigration control:                No
+Birth control:                      No
+```
+
+After the census is updating, enable one new controller at a time.
+
+A reasonable demographic target is:
+
+```text
+Child:      15
+Teen:       10
+Adult:      60
+Elderly:    15
+```
+
+The four target values are relative weights and are normalized automatically.
+
+## Logs
+
+The default Proton log directory is usually:
+
+```text
+~/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Logs
+```
+
+Check Cim Rejuvenator messages:
+
+```bash
+grep -RniE "CimRejuvenator|PopulationManagementSystem|PopulationFlowSystem|BirthRateControlSystem|ImmigrationControlSystem|Exception|ERROR" \
+"$HOME/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Logs" \
+| tail -250
+```
+
+The mod-specific log is normally:
 
 ```text
 .../Cities Skylines II/Logs/CimRejuvenator.log
 ```
 
-Na v0.2.0 você deve ver algo semelhante a:
+## Build failures
 
-```text
-Loading Cim Rejuvenator v0.2.0
-RejuvenationSystem created...
-Completed automatic rejuvenation sweep: ...
+Save a complete build log with:
+
+```bash
+./build-no-unity-linux.sh > build-error.txt 2>&1
 ```
 
----
+A `CSxxxx` compiler error usually means a game API field, namespace, or type differs from the version targeted by the current source. The direct build deliberately uses the installed game's assemblies, so these errors expose compatibility changes immediately.
 
-## 7 — Teste rápido da v0.2.0
+## Updating a local installation
 
-Em:
-
-```text
-Opções > Mods > Cim Rejuvenator
-```
-
-para um teste agressivo:
-
-```text
-Chance:                    100%
-Máximo por dia:         100.000
-Máximo por varredura:    50.000
-Varreduras por dia:          64
-```
-
-Pressione:
-
-```text
-REJUVENESCER AGORA
-```
-
-Feche as opções, despause o jogo e aguarde a simulação rodar.
-
-O botão ainda respeita os limites configurados.
-
----
-
-## 8 — Limites máximos atuais
-
-```text
-Máximo por dia:       250.000
-Máximo por varredura: 100.000
-Varreduras por dia:       256
-```
-
-Valores extremos existem principalmente para recuperação/testes. Para uso contínuo é melhor baixar depois.
-
----
-
-## 9 — Configuração recomendada depois da recuperação
-
-```text
-Chance:                       80%
-Idade:                         40
-Saúde mínima:              ligada
-Máximo por dia:        10k–25k
-Máximo por varredura:   2k–5k
-Varreduras por dia:            64
-Manter mínimo de idosos:   ligado
-Mínimo de idosos:          15–20%
-```
-
----
-
-## 10 — Atualizações futuras ficaram simples
-
-Depois disso, sempre que o GitHub receber uma atualização:
+With the game closed:
 
 ```bash
 cd ~/CimRejuvenator
@@ -189,4 +168,4 @@ git pull
 ./build-no-unity-linux.sh --deploy
 ```
 
-E pronto: você não precisa mais entrar no Windows só para recompilar o mod.
+Restart the game after deployment.
