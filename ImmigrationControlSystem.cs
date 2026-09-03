@@ -12,6 +12,7 @@ namespace CimRejuvenator
         private SimulationSystem m_SimulationSystem;
         private EntityQuery m_TimeDataQuery;
         private bool m_WasControlling;
+        private bool m_PreviousEnabledState = true;
 
         protected override void OnCreate()
         {
@@ -31,30 +32,39 @@ namespace CimRejuvenator
         protected override void OnUpdate()
         {
             var setting = Mod.Setting;
-            if (setting == null || !setting.EnableMod || !setting.EnableImmigrationControl)
+            if (!PopulationTrendSystem.ShouldControlImmigration(setting))
             {
                 ReleaseControl();
                 return;
+            }
+
+            if (!m_WasControlling)
+            {
+                m_PreviousEnabledState = m_HouseholdSpawnSystem.Enabled;
+                m_WasControlling = true;
             }
 
             var timeData = m_TimeDataQuery.GetSingleton<TimeData>();
             var day = TimeSystem.GetDay(m_SimulationSystem.frameIndex, timeData);
             PopulationFlowSystem.EnsureDay(day);
 
+            var manualControlEnabled = setting.EnableImmigrationControl;
+
             var dailyCapReached =
+                manualControlEnabled &&
                 setting.UseImmigrationDailyCap &&
                 PopulationFlowSystem.NewResidentsToday >= setting.MaxNewResidentsPerDay;
 
             var populationCeilingReached =
+                manualControlEnabled &&
                 setting.UsePopulationCeiling &&
                 PopulationManagementSystem.ResidentCount >= setting.PopulationCeiling;
 
-            var intensity = PopulationManagementSystem.Clamp(setting.ImmigrationIntensity, 0, 100);
+            var intensity = PopulationTrendSystem.GetEffectiveImmigrationIntensity(setting);
             var intensityAllowsSpawn = PassesIntensity(m_SimulationSystem.frameIndex, intensity);
             var enabled = !dailyCapReached && !populationCeilingReached && intensityAllowsSpawn;
 
             m_HouseholdSpawnSystem.Enabled = enabled;
-            m_WasControlling = true;
 
             if (dailyCapReached)
             {
@@ -66,7 +76,11 @@ namespace CimRejuvenator
             }
             else if (intensity <= 0)
             {
-                Status = "Paused: 0% intensity";
+                Status = "Paused: 0% effective intensity";
+            }
+            else if (setting.EnablePopulationTrendControl && setting.TrendUseImmigration)
+            {
+                Status = $"Trend controlled: {intensity}% effective intensity";
             }
             else if (intensity >= 100)
             {
@@ -88,7 +102,7 @@ namespace CimRejuvenator
         {
             if (m_WasControlling && m_HouseholdSpawnSystem != null)
             {
-                m_HouseholdSpawnSystem.Enabled = true;
+                m_HouseholdSpawnSystem.Enabled = m_PreviousEnabledState;
             }
 
             m_WasControlling = false;
