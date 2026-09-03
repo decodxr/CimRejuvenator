@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.1
+
+### Fixed
+
+- Direct and adaptive trend control now read `Game.City.Population.m_Population`, the same population component used by the vanilla city UI, instead of relying only on the mod's filtered resident census.
+- Direct growth checks increased from 64 to 256 per simulation day for faster response to sudden population loss.
+- Direct mode now estimates short-window hourly population movement and adds a recovery reserve when the visible city population is still falling, helping the controller push past break-even instead of only replacing the latest loss.
+- Pending direct residents are credited more conservatively so delayed household initialization cannot make the controller believe a population loss has already been recovered.
+- Trend logs now report vanilla population, managed resident census, estimated hourly movement, protected floor, shortfall, scheduled residents, and pending residents.
+
 ## 0.6.0
 
 ### Added
