@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.6.0
+
+### Added
+
+- Continuous direct growth lock that reacts throughout the simulation day instead of waiting for one daily correction.
+- A non-decreasing high-water population floor for zero and positive direct targets.
+- Positive direct targets now create a protected upward trajectory across the day.
+- Separate direct-injection limits per day and per correction check.
+- Emergency growth preset for severe population collapse.
+- Diagnostics for protected population floor, current shortfall, and pending direct residents.
+- Portuguese localization selected automatically for Portuguese game locales.
+- English fallback registration for other supported game locales.
+
+### Changed
+
+- Population trend target range increased from +/-100,000 to +/-500,000 residents per day.
+- Maximum direct-injection capacity increased to 1,000,000 estimated residents per day.
+- Birth-rate controller and automatic trend birth-rate ceiling increased to 1,000%.
+- Immigration daily cap increased to 1,000,000 and resident population ceiling increased to 5,000,000.
+- Direct mode trusts only part of not-yet-established injected population so it retries more aggressively during sustained death waves.
+- Pending direct population is partially retried across day boundaries instead of being trusted forever.
+- Positive direct mode no longer depends on the previous full-day trend before it can react to a current population drop.
+
+### Behavior notes
+
+- A direct target of `0/day` acts as a no-decline lock.
+- A direct positive target both replaces observed losses and advances the protected population floor.
+- Direct household counts remain estimates until the normal household initialization and move-in pipeline establishes the residents.
+
 ## 0.5.0
 
 ### Added
