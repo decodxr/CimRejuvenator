@@ -77,7 +77,11 @@ namespace CimRejuvenator
             m_SimulationSystem = World.GetOrCreateSystemManaged<SimulationSystem>();
             m_CitizenQuery = GetEntityQuery(new EntityQueryDesc
             {
-                All = new[] { ComponentType.ReadWrite<Citizen>() },
+                All = new[]
+                {
+                    ComponentType.ReadWrite<Citizen>(),
+                    ComponentType.ReadOnly<HouseholdMember>(),
+                },
                 None = new[]
                 {
                     ComponentType.ReadOnly<Deleted>(),
@@ -152,13 +156,17 @@ namespace CimRejuvenator
             for (var i = 0; i < entities.Length; i++)
             {
                 var citizen = citizens[i];
-                if (!IsLivingResident(entities[i], citizen))
+                if (!IsEstablishedLivingResident(entities[i], citizen))
                 {
                     continue;
                 }
 
                 residentCount++;
-                counts[(int)citizen.GetAge()]++;
+                var ageIndex = (int)citizen.GetAge();
+                if (ageIndex >= 0 && ageIndex < counts.Length)
+                {
+                    counts[ageIndex]++;
+                }
             }
 
             ResidentCount = residentCount;
@@ -233,7 +241,7 @@ namespace CimRejuvenator
                 var citizen = citizens[i];
                 var entity = entities[i];
 
-                if (!IsLivingResident(entity, citizen) || citizen.GetAge() != CitizenAge.Elderly)
+                if (!IsEstablishedLivingResident(entity, citizen) || citizen.GetAge() != CitizenAge.Elderly)
                 {
                     continue;
                 }
@@ -292,14 +300,14 @@ namespace CimRejuvenator
             {
                 var entity = entities[i];
                 var citizen = citizens[i];
-                if (!IsLivingResident(entity, citizen))
+                if (!IsEstablishedLivingResident(entity, citizen))
                 {
                     continue;
                 }
 
                 var sourceAge = citizen.GetAge();
                 var sourceIndex = (int)sourceAge;
-                if (counts[sourceIndex] <= desired[sourceIndex])
+                if (sourceIndex < 0 || sourceIndex >= 4 || counts[sourceIndex] <= desired[sourceIndex])
                 {
                     continue;
                 }
@@ -308,6 +316,13 @@ namespace CimRejuvenator
                 if (targetIndex < 0 || targetIndex == sourceIndex)
                 {
                     break;
+                }
+
+                // Avoid rewriting life stage while the citizen is in an active trip or enrolled.
+                // Those transitions have additional vanilla side effects that should be allowed to finish normally.
+                if (EntityManager.HasComponent<TravelPurpose>(entity) || EntityManager.HasComponent<Student>(entity))
+                {
+                    continue;
                 }
 
                 var targetAge = (CitizenAge)targetIndex;
@@ -320,6 +335,11 @@ namespace CimRejuvenator
                 if (hasWorker && targetAge != CitizenAge.Adult)
                 {
                     EntityManager.RemoveComponent<Worker>(entity);
+                }
+
+                if (targetAge == CitizenAge.Child || targetAge == CitizenAge.Teen)
+                {
+                    citizen.m_State &= ~CitizenFlags.LookingForPartner;
                 }
 
                 citizen.SetAge(targetAge);
@@ -386,20 +406,35 @@ namespace CimRejuvenator
             return bestIndex;
         }
 
-        private bool IsLivingResident(Entity entity, Citizen citizen)
+        private bool IsEstablishedLivingResident(Entity entity, Citizen citizen)
         {
             if ((citizen.m_State & (CitizenFlags.Tourist | CitizenFlags.Commuter)) != 0)
             {
                 return false;
             }
 
-            if (!EntityManager.HasComponent<HealthProblem>(entity))
+            if (EntityManager.HasComponent<HealthProblem>(entity))
             {
-                return true;
+                var problem = EntityManager.GetComponentData<HealthProblem>(entity);
+                if ((problem.m_Flags & HealthProblemFlags.Dead) != 0)
+                {
+                    return false;
+                }
             }
 
-            var problem = EntityManager.GetComponentData<HealthProblem>(entity);
-            return (problem.m_Flags & HealthProblemFlags.Dead) == 0;
+            if (!EntityManager.HasComponent<HouseholdMember>(entity))
+            {
+                return false;
+            }
+
+            var member = EntityManager.GetComponentData<HouseholdMember>(entity);
+            if (!EntityManager.Exists(member.m_Household) || !EntityManager.HasComponent<Household>(member.m_Household))
+            {
+                return false;
+            }
+
+            var household = EntityManager.GetComponentData<Household>(member.m_Household);
+            return (household.m_Flags & HouseholdFlags.MovedIn) != 0;
         }
 
         internal static short ToBirthDay(int day, int ageInDays)
