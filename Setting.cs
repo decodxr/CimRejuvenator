@@ -148,7 +148,7 @@ namespace CimRejuvenator
         public bool EnablePopulationTrendControl { get; set; }
 
         [SettingsUIDisableByCondition(typeof(CimRejuvenatorSetting), nameof(IsTrendControlDisabled))]
-        [SettingsUISlider(min = -100000, max = 100000, step = 100, scalarMultiplier = 1, unit = Unit.kInteger)]
+        [SettingsUISlider(min = -500000, max = 500000, step = 500, scalarMultiplier = 1, unit = Unit.kInteger)]
         [SettingsUISection(kSection, kTrendGroup)]
         public int TargetNetPopulationChangePerDay { get; set; }
 
@@ -162,9 +162,14 @@ namespace CimRejuvenator
         public int DirectTrendCorrectionStrength { get; set; }
 
         [SettingsUIDisableByCondition(typeof(CimRejuvenatorSetting), nameof(IsDirectTrendModeDisabled))]
-        [SettingsUISlider(min = 100, max = 250000, step = 1000, scalarMultiplier = 1, unit = Unit.kInteger)]
+        [SettingsUISlider(min = 100, max = 1000000, step = 5000, scalarMultiplier = 1, unit = Unit.kInteger)]
         [SettingsUISection(kSection, kTrendGroup)]
         public int DirectTrendMaxInjectedResidentsPerDay { get; set; }
+
+        [SettingsUIDisableByCondition(typeof(CimRejuvenatorSetting), nameof(IsDirectTrendModeDisabled))]
+        [SettingsUISlider(min = 100, max = 250000, step = 1000, scalarMultiplier = 1, unit = Unit.kInteger)]
+        [SettingsUISection(kSection, kTrendGroup)]
+        public int DirectTrendMaxInjectedResidentsPerCheck { get; set; }
 
         [SettingsUIDisableByCondition(typeof(CimRejuvenatorSetting), nameof(IsAdaptiveTrendModeDisabled))]
         [SettingsUISlider(min = 10, max = 100, step = 5, scalarMultiplier = 1, unit = Unit.kPercentage)]
@@ -185,7 +190,7 @@ namespace CimRejuvenator
         public bool TrendUseBirths { get; set; }
 
         [SettingsUIDisableByCondition(typeof(CimRejuvenatorSetting), nameof(IsTrendBirthControlDisabled))]
-        [SettingsUISlider(min = 100, max = 500, step = 10, scalarMultiplier = 1, unit = Unit.kPercentage)]
+        [SettingsUISlider(min = 100, max = 1000, step = 25, scalarMultiplier = 1, unit = Unit.kPercentage)]
         [SettingsUISection(kSection, kTrendGroup)]
         public int TrendMaximumBirthRatePercent { get; set; }
 
@@ -194,9 +199,33 @@ namespace CimRejuvenator
         public bool TrendAllowForcedOutflow { get; set; }
 
         [SettingsUIDisableByCondition(typeof(CimRejuvenatorSetting), nameof(IsForcedOutflowDisabled))]
-        [SettingsUISlider(min = 100, max = 100000, step = 100, scalarMultiplier = 1, unit = Unit.kInteger)]
+        [SettingsUISlider(min = 100, max = 250000, step = 500, scalarMultiplier = 1, unit = Unit.kInteger)]
         [SettingsUISection(kSection, kTrendGroup)]
         public int TrendMaxForcedOutflowPerDay { get; set; }
+
+        [SettingsUIButton]
+        [SettingsUISection(kSection, kTrendGroup)]
+        public bool EmergencyGrowthPreset
+        {
+            set
+            {
+                EnableMod = true;
+                EnablePopulationTrendControl = true;
+                DirectTrendMode = true;
+                TargetNetPopulationChangePerDay = 5000;
+                DirectTrendCorrectionStrength = 100;
+                DirectTrendMaxInjectedResidentsPerDay = 250000;
+                DirectTrendMaxInjectedResidentsPerCheck = 50000;
+                TrendDeadband = 0;
+                TrendUseImmigration = true;
+                TrendUseBirths = true;
+                TrendMaximumBirthRatePercent = 500;
+                TrendAllowForcedOutflow = false;
+                EnableImmigrationControl = false;
+                EnableBirthControl = false;
+                PopulationTrendSystem.RequestReset();
+            }
+        }
 
         [SettingsUIButton]
         [SettingsUIDisableByCondition(typeof(CimRejuvenatorSetting), nameof(IsTrendControlDisabled))]
@@ -222,7 +251,7 @@ namespace CimRejuvenator
         public bool UseImmigrationDailyCap { get; set; }
 
         [SettingsUIDisableByCondition(typeof(CimRejuvenatorSetting), nameof(IsImmigrationDailyCapDisabled))]
-        [SettingsUISlider(min = 10, max = 250000, step = 100, scalarMultiplier = 1, unit = Unit.kInteger)]
+        [SettingsUISlider(min = 10, max = 1000000, step = 1000, scalarMultiplier = 1, unit = Unit.kInteger)]
         [SettingsUISection(kSection, kImmigrationGroup)]
         public int MaxNewResidentsPerDay { get; set; }
 
@@ -231,7 +260,7 @@ namespace CimRejuvenator
         public bool UsePopulationCeiling { get; set; }
 
         [SettingsUIDisableByCondition(typeof(CimRejuvenatorSetting), nameof(IsPopulationCeilingDisabled))]
-        [SettingsUISlider(min = 1000, max = 2000000, step = 1000, scalarMultiplier = 1, unit = Unit.kInteger)]
+        [SettingsUISlider(min = 1000, max = 5000000, step = 5000, scalarMultiplier = 1, unit = Unit.kInteger)]
         [SettingsUISection(kSection, kImmigrationGroup)]
         public int PopulationCeiling { get; set; }
 
@@ -270,7 +299,7 @@ namespace CimRejuvenator
         public bool EnableBirthControl { get; set; }
 
         [SettingsUIDisableByCondition(typeof(CimRejuvenatorSetting), nameof(IsBirthControlDisabled))]
-        [SettingsUISlider(min = 0, max = 500, step = 10, scalarMultiplier = 1, unit = Unit.kPercentage)]
+        [SettingsUISlider(min = 0, max = 1000, step = 25, scalarMultiplier = 1, unit = Unit.kPercentage)]
         [SettingsUISection(kSection, kBirthGroup)]
         public int BirthRatePercent { get; set; }
 
@@ -279,7 +308,7 @@ namespace CimRejuvenator
         public bool UseBirthDailyCap { get; set; }
 
         [SettingsUIDisableByCondition(typeof(CimRejuvenatorSetting), nameof(IsBirthDailyCapDisabled))]
-        [SettingsUISlider(min = 10, max = 100000, step = 100, scalarMultiplier = 1, unit = Unit.kInteger)]
+        [SettingsUISlider(min = 10, max = 250000, step = 500, scalarMultiplier = 1, unit = Unit.kInteger)]
         [SettingsUISection(kSection, kBirthGroup)]
         public int MaxBirthsPerDay { get; set; }
 
@@ -347,7 +376,7 @@ namespace CimRejuvenator
         [SettingsUISection(kSection, kStatsGroup)]
         public string TrendMode => !EnablePopulationTrendControl
             ? "Disabled"
-            : (DirectTrendMode ? "Direct" : "Adaptive");
+            : (DirectTrendMode ? "Direct growth lock" : "Adaptive");
 
         [SettingsUISection(kSection, kStatsGroup)]
         public string TrendTarget => TargetNetPopulationChangePerDay.ToString("+0;-0;0") + "/day";
@@ -363,6 +392,15 @@ namespace CimRejuvenator
 
         [SettingsUISection(kSection, kStatsGroup)]
         public string TrendEffectiveBirthRate => PopulationTrendSystem.EffectiveBirthRatePercent.ToString("N0") + "%";
+
+        [SettingsUISection(kSection, kStatsGroup)]
+        public string TrendGrowthFloor => PopulationTrendSystem.GrowthFloorPopulation.ToString("N0");
+
+        [SettingsUISection(kSection, kStatsGroup)]
+        public string TrendShortfallLastCheck => PopulationTrendSystem.ShortfallLastCheck.ToString("N0");
+
+        [SettingsUISection(kSection, kStatsGroup)]
+        public string TrendPendingDirectResidents => PopulationTrendSystem.DirectPendingResidents.ToString("N0");
 
         [SettingsUISection(kSection, kStatsGroup)]
         public string TrendDirectCorrectionRequested => PopulationTrendSystem.DirectCorrectionRequestedLastDay.ToString("N0");
@@ -449,21 +487,22 @@ namespace CimRejuvenator
             TargetNetPopulationChangePerDay = 0;
             DirectTrendMode = false;
             DirectTrendCorrectionStrength = 100;
-            DirectTrendMaxInjectedResidentsPerDay = 50000;
+            DirectTrendMaxInjectedResidentsPerDay = 250000;
+            DirectTrendMaxInjectedResidentsPerCheck = 50000;
             TrendResponseStrength = 50;
-            TrendDeadband = 500;
+            TrendDeadband = 250;
             TrendUseImmigration = true;
             TrendUseBirths = true;
-            TrendMaximumBirthRatePercent = 300;
+            TrendMaximumBirthRatePercent = 500;
             TrendAllowForcedOutflow = false;
             TrendMaxForcedOutflowPerDay = 5000;
 
             EnableImmigrationControl = false;
             ImmigrationIntensity = 100;
             UseImmigrationDailyCap = false;
-            MaxNewResidentsPerDay = 10000;
+            MaxNewResidentsPerDay = 25000;
             UsePopulationCeiling = false;
-            PopulationCeiling = 500000;
+            PopulationCeiling = 750000;
             ShapeNewResidentAges = false;
             IncomingChildWeight = 15;
             IncomingTeenWeight = 10;
@@ -473,7 +512,7 @@ namespace CimRejuvenator
             EnableBirthControl = false;
             BirthRatePercent = 100;
             UseBirthDailyCap = false;
-            MaxBirthsPerDay = 5000;
+            MaxBirthsPerDay = 10000;
             BirthsRespectChildTarget = false;
 
             SweepsPerDay = 64;
