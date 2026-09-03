@@ -9,7 +9,7 @@ namespace CimRejuvenator
     public sealed class Mod : IMod
     {
         public const string ModId = "CimRejuvenator";
-        public const string Version = "0.4.0";
+        public const string Version = "0.5.0";
 
         public static readonly ILog Log = LogManager
             .GetLogger(ModId)
@@ -28,6 +28,7 @@ namespace CimRejuvenator
 
             Setting = new CimRejuvenatorSetting(this);
             GameManager.instance.localizationManager.AddSource("en-US", new LocaleEN(Setting));
+            GameManager.instance.localizationManager.AddSource("en-US", new LocaleDirectEN(Setting));
             AssetDatabase.global.LoadSettings(ModId, Setting, new CimRejuvenatorSetting(this));
             Setting.RegisterInOptionsUI();
 
