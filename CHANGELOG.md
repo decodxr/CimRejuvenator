@@ -1,11 +1,34 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
-### Changed
+### Added
 
-- Replaced the MIT license for current and future distributions with the Cim Rejuvenator Noncommercial Attribution License 1.0.
-- Redistribution and derivative works now require visible credit to Cim Rejuvenator by decodxr and preservation of the project license and notice.
+- Adaptive population trend controller with a configurable net resident-change target from -100,000 to +100,000 residents per simulation day.
+- Trend response strength and deadband controls.
+- Optional immigration and birth-rate channels for automatic trend correction.
+- Configurable maximum automatic birth-rate multiplier.
+- Optional forced household outflow for negative population targets, disabled by default.
+- Trend statistics for actual daily change, smoothed trend, effective immigration, effective birth rate, and forced outflow.
+- Loaded build version displayed directly in the Options page.
+- Build metadata and SHA-256 checksum output for direct-assembly builds.
+- Duplicate local DLL detection during Linux deployment.
+
+### Fixed and hardened
+
+- Direct Linux and Windows builds now delete `bin`, `obj`, and `dist` before compiling so an old DLL cannot be redeployed after source changes.
+- Linux deployment now replaces the local mod directory and verifies the deployed DLL checksum against the freshly built DLL.
+- Settings localization and persisted values are loaded before the Options page is registered.
+- Resident census, demographic management, and population-flow tracking now require moved-in resident households and exclude households already moving away.
+- Population-flow tracking was reduced from 512 to 128 full checks per day and periodically prunes stale citizen keys.
+- Immigration control restores the previous `HouseholdSpawnSystem.Enabled` state when it releases control instead of always forcing the vanilla spawner on.
+- Demographic balancing skips residents in active trips or enrolled as students and clears partner-seeking state when converting to Child or Teen.
+- Incoming age shaping clears partner-seeking state when assigning Child or Teen.
+
+### Licensing
+
+- Current and future distributions use the Cim Rejuvenator Noncommercial Attribution License 1.0.
+- Redistribution and derivative works require visible credit to Cim Rejuvenator by decodxr and preservation of the project license and notice.
 - Commercial distribution, paid access, sale, and monetization of the software or derivative works are prohibited without prior written permission.
 - Previously distributed MIT copies remain governed by the license that accompanied those copies.
 
