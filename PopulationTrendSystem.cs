@@ -13,22 +13,24 @@ using Unity.Entities;
 namespace CimRejuvenator
 {
     /// <summary>
-    /// Controls established resident population movement.
-    /// Adaptive mode steers vanilla immigration and birth rates once per simulation day.
-    /// Direct mode acts as a continuous growth lock: it maintains a non-decreasing population
-    /// floor and schedules normal vanilla households whenever the observed population falls
-    /// behind the selected growth trajectory.
+    /// Controls population movement using the same Game.City.Population component that feeds
+    /// the vanilla population UI. Adaptive mode steers rates once per simulation day. Direct
+    /// mode protects a continuously rising floor and schedules normal vanilla households when
+    /// the displayed city population falls below that floor.
     /// </summary>
     public partial class PopulationTrendSystem : GameSystemBase
     {
         public const int FramesPerDay = 262144;
-        public const int ChecksPerDay = 64;
+        public const int ChecksPerDay = 256;
         private const int MaxDirectHouseholdsPerCorrection = 100000;
-        private const int PendingCreditPercent = 50;
-        private const int PendingRetryPercentPerDay = 50;
+        private const int PendingCreditPercent = 25;
+        private const int PendingRetryPercentPerDay = 25;
 
         public static int ActualChangeLastDay { get; private set; }
         public static double SmoothedChangePerDay { get; private set; }
+        public static double EstimatedHourlyChange { get; private set; }
+        public static int CurrentGamePopulation { get; private set; }
+        public static int CurrentManagedPopulation { get; private set; }
         public static int EffectiveImmigrationIntensity { get; private set; } = 100;
         public static int EffectiveBirthRatePercent { get; private set; } = 100;
         public static int ForcedOutflowToday { get; private set; }
@@ -41,11 +43,13 @@ namespace CimRejuvenator
         public static int DirectPendingResidents { get; private set; }
         public static int GrowthFloorPopulation { get; private set; }
         public static int ShortfallLastCheck { get; private set; }
+        public static string PopulationSource { get; private set; } = "Waiting";
         public static string Status { get; private set; } = "Disabled";
 
         private static int s_ResetRequested;
 
         private SimulationSystem m_SimulationSystem;
+        private CitySystem m_CitySystem;
         private EndFrameBarrier m_EndFrameBarrier;
         private EntityQuery m_TimeDataQuery;
         private EntityQuery m_HouseholdQuery;
@@ -55,11 +59,13 @@ namespace CimRejuvenator
         private int m_LastDay = int.MinValue;
         private int m_LastPopulation;
         private int m_LastGuardPopulation;
+        private int m_LastCheckPopulation;
         private int m_HighWaterPopulation;
         private int m_DayStartPopulation;
         private int m_ChecksInDay;
         private int m_PendingDirectResidents;
         private bool m_HasTrendSample;
+        private bool m_HasHourlySample;
         private bool m_WasEnabled;
 
         public static void RequestReset()
@@ -71,6 +77,7 @@ namespace CimRejuvenator
         {
             ActualChangeLastDay = 0;
             SmoothedChangePerDay = 0;
+            EstimatedHourlyChange = 0;
             ForcedOutflowToday = 0;
             ForcedOutflowSession = 0;
             DirectCorrectionRequestedLastDay = 0;
@@ -160,6 +167,7 @@ namespace CimRejuvenator
             base.OnCreate();
 
             m_SimulationSystem = World.GetOrCreateSystemManaged<SimulationSystem>();
+            m_CitySystem = World.GetOrCreateSystemManaged<CitySystem>();
             m_EndFrameBarrier = World.GetOrCreateSystemManaged<EndFrameBarrier>();
             m_TimeDataQuery = GetEntityQuery(ComponentType.ReadOnly<TimeData>());
 
@@ -193,7 +201,7 @@ namespace CimRejuvenator
                 ComponentType.Exclude<Deleted>());
 
             RequireForUpdate(m_TimeDataQuery);
-            Mod.Log.Info("PopulationTrendSystem initialized.");
+            Mod.Log.Info("PopulationTrendSystem initialized with vanilla city-population tracking.");
         }
 
         public override int GetUpdateInterval(SystemUpdatePhase phase)
@@ -225,12 +233,14 @@ namespace CimRejuvenator
                 ResetRuntime(setting);
             }
 
-            var population = PopulationManagementSystem.ResidentCount;
+            var population = ReadControlledPopulation();
             if (population <= 0)
             {
-                Status = "Waiting for population census";
+                Status = "Waiting for city population";
                 return;
             }
+
+            UpdateFastTrend(population);
 
             var timeData = m_TimeDataQuery.GetSingleton<TimeData>();
             var day = TimeSystem.GetDay(m_SimulationSystem.frameIndex, timeData);
@@ -275,11 +285,55 @@ namespace CimRejuvenator
             }
         }
 
+        private int ReadControlledPopulation()
+        {
+            CurrentManagedPopulation = Math.Max(0, PopulationManagementSystem.ResidentCount);
+
+            var city = m_CitySystem != null ? m_CitySystem.City : Entity.Null;
+            if (city != Entity.Null &&
+                EntityManager.Exists(city) &&
+                EntityManager.HasComponent<Game.City.Population>(city))
+            {
+                var value = EntityManager.GetComponentData<Game.City.Population>(city).m_Population;
+                CurrentGamePopulation = Math.Max(0, value);
+                PopulationSource = "Game.City.Population (vanilla UI)";
+                return CurrentGamePopulation;
+            }
+
+            CurrentGamePopulation = CurrentManagedPopulation;
+            PopulationSource = "Managed resident census fallback";
+            return CurrentManagedPopulation;
+        }
+
+        private void UpdateFastTrend(int population)
+        {
+            if (m_LastCheckPopulation > 0)
+            {
+                var delta = population - m_LastCheckPopulation;
+                var rawHourly = delta * (ChecksPerDay / 24.0);
+
+                if (!m_HasHourlySample)
+                {
+                    EstimatedHourlyChange = rawHourly;
+                    m_HasHourlySample = true;
+                }
+                else
+                {
+                    const double smoothing = 0.30;
+                    EstimatedHourlyChange =
+                        EstimatedHourlyChange * (1.0 - smoothing) + rawHourly * smoothing;
+                }
+            }
+
+            m_LastCheckPopulation = population;
+        }
+
         private void InitializeBaseline(CimRejuvenatorSetting setting, int day, int population)
         {
             m_LastDay = day;
             m_LastPopulation = population;
             m_LastGuardPopulation = population;
+            m_LastCheckPopulation = population;
             m_HighWaterPopulation = population;
             m_DayStartPopulation = population;
             m_ChecksInDay = 0;
@@ -305,7 +359,7 @@ namespace CimRejuvenator
                 : 100;
 
             Status = setting.DirectTrendMode
-                ? "Direct growth lock: baseline established"
+                ? "Direct growth lock: vanilla population baseline established"
                 : "Learning baseline";
         }
 
@@ -314,14 +368,17 @@ namespace CimRejuvenator
             m_LastDay = int.MinValue;
             m_LastPopulation = 0;
             m_LastGuardPopulation = 0;
+            m_LastCheckPopulation = 0;
             m_HighWaterPopulation = 0;
             m_DayStartPopulation = 0;
             m_ChecksInDay = 0;
             m_PendingDirectResidents = 0;
             m_HasTrendSample = false;
+            m_HasHourlySample = false;
 
             ActualChangeLastDay = 0;
             SmoothedChangePerDay = 0;
+            EstimatedHourlyChange = 0;
             ForcedOutflowToday = 0;
             DirectCorrectionRequestedLastDay = 0;
             DirectResidentsInjectedToday = 0;
@@ -383,8 +440,6 @@ namespace CimRejuvenator
             ShortfallLastCheck = 0;
             m_ChecksInDay = 0;
 
-            // Direct households can take time to become established residents. Only half of the
-            // outstanding estimate is trusted across a day boundary; the other half is retried.
             m_PendingDirectResidents =
                 m_PendingDirectResidents * PendingRetryPercentPerDay / 100;
             DirectPendingResidents = m_PendingDirectResidents;
@@ -414,12 +469,16 @@ namespace CimRejuvenator
             var trajectoryFloor = m_DayStartPopulation + trajectoryGrowth;
             GrowthFloorPopulation = Math.Max(m_HighWaterPopulation, trajectoryFloor);
 
-            // We deliberately credit only half of scheduled-but-not-yet-established residents.
-            // This keeps the controller aggressive during a death wave instead of waiting an
-            // entire day for every incoming household to finish the vanilla move-in pipeline.
             var pendingCredit = m_PendingDirectResidents * PendingCreditPercent / 100;
             var effectivePopulation = population + pendingCredit;
-            var shortfall = Math.Max(0, GrowthFloorPopulation - effectivePopulation);
+            var floorShortfall = Math.Max(0, GrowthFloorPopulation - effectivePopulation);
+
+            // A falling vanilla hourly trend receives an additional recovery reserve. This makes
+            // the controller push past break-even instead of merely replacing the latest loss.
+            var targetHourly = target / 24.0;
+            var velocityShortfall = Math.Max(0.0, targetHourly - EstimatedHourlyChange);
+            var recoveryReserve = (int)Math.Ceiling(velocityShortfall);
+            var shortfall = Math.Max(0, floorShortfall + recoveryReserve);
             ShortfallLastCheck = shortfall;
 
             if (setting.TrendUseImmigration)
@@ -438,8 +497,8 @@ namespace CimRejuvenator
                 DirectCorrectionRequestedLastDay = 0;
                 DirectPendingResidents = m_PendingDirectResidents;
                 Status = target > 0
-                    ? $"Growth lock holding floor {GrowthFloorPopulation:N0}"
-                    : $"No-decline lock holding {GrowthFloorPopulation:N0}";
+                    ? $"Growth lock holding vanilla floor {GrowthFloorPopulation:N0}"
+                    : $"No-decline lock holding vanilla population {GrowthFloorPopulation:N0}";
                 return;
             }
 
@@ -485,9 +544,10 @@ namespace CimRejuvenator
             {
                 Status = $"Growth lock correcting {shortfall:N0}: scheduled ~{result.residents:N0}";
                 Mod.Log.Info(
-                    $"Direct growth lock: population={population:N0}, floor={GrowthFloorPopulation:N0}, " +
-                    $"shortfall={shortfall:N0}, requested={requested:N0}, " +
-                    $"scheduledResidents={result.residents:N0}, pending={m_PendingDirectResidents:N0}.");
+                    $"Direct growth lock: gamePopulation={population:N0}, managed={CurrentManagedPopulation:N0}, " +
+                    $"hourly={EstimatedHourlyChange:+0;-0;0}/h, floor={GrowthFloorPopulation:N0}, " +
+                    $"shortfall={shortfall:N0}, requested={requested:N0}, scheduled={result.residents:N0}, " +
+                    $"pending={m_PendingDirectResidents:N0}.");
             }
             else
             {
