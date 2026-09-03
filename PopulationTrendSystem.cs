@@ -175,9 +175,9 @@ namespace CimRejuvenator
 
             // Matches the vanilla resident household spawn connection filter.
             m_OutsideConnectionQuery = GetEntityQuery(
-                ComponentType.ReadOnly<OutsideConnection>(),
-                ComponentType.Exclude<ElectricityOutsideConnection>(),
-                ComponentType.Exclude<WaterPipeOutsideConnection>(),
+                ComponentType.ReadOnly<Game.Objects.OutsideConnection>(),
+                ComponentType.Exclude<Game.Objects.ElectricityOutsideConnection>(),
+                ComponentType.Exclude<Game.Objects.WaterPipeOutsideConnection>(),
                 ComponentType.Exclude<Temp>(),
                 ComponentType.Exclude<Deleted>());
 
