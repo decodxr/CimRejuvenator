@@ -10,7 +10,7 @@ namespace CimRejuvenator
     public sealed class Mod : IMod
     {
         public const string ModId = "CimRejuvenator";
-        public const string Version = "0.6.0";
+        public const string Version = "0.6.1";
 
         public static readonly ILog Log = LogManager
             .GetLogger(ModId)
@@ -54,8 +54,6 @@ namespace CimRejuvenator
                 }
                 else
                 {
-                    // Unsupported languages receive complete English fallback strings while still
-                    // following the game's active locale selection automatically.
                     manager.AddSource(localeId, new LocaleEN(Setting));
                     manager.AddSource(localeId, new LocaleDirectEN(Setting));
                 }
