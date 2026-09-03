@@ -39,7 +39,7 @@ namespace CimRejuvenator
         protected override void OnUpdate()
         {
             var setting = Mod.Setting;
-            if (setting == null || !setting.EnableMod || !setting.EnableBirthControl)
+            if (!PopulationTrendSystem.ShouldControlBirths(setting))
             {
                 RestoreOriginalValues();
                 LastAppliedBirthRatePercent = 100;
@@ -50,15 +50,18 @@ namespace CimRejuvenator
             var day = TimeSystem.GetDay(m_SimulationSystem.frameIndex, timeData);
             PopulationFlowSystem.EnsureDay(day);
 
-            var requestedPercent = PopulationManagementSystem.Clamp(setting.BirthRatePercent, 0, 500);
-            var appliedPercent = requestedPercent;
+            var appliedPercent = PopulationTrendSystem.GetEffectiveBirthRatePercent(setting);
 
-            if (setting.UseBirthDailyCap && PopulationFlowSystem.BirthsToday >= setting.MaxBirthsPerDay)
+            if (setting.EnableBirthControl &&
+                setting.UseBirthDailyCap &&
+                PopulationFlowSystem.BirthsToday >= setting.MaxBirthsPerDay)
             {
                 appliedPercent = 0;
             }
 
-            if (setting.BirthsRespectChildTarget && ChildTargetReached(setting))
+            if (setting.EnableBirthControl &&
+                setting.BirthsRespectChildTarget &&
+                ChildTargetReached(setting))
             {
                 appliedPercent = 0;
             }
