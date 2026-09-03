@@ -153,6 +153,20 @@ namespace CimRejuvenator
         public int TargetNetPopulationChangePerDay { get; set; }
 
         [SettingsUIDisableByCondition(typeof(CimRejuvenatorSetting), nameof(IsTrendControlDisabled))]
+        [SettingsUISection(kSection, kTrendGroup)]
+        public bool DirectTrendMode { get; set; }
+
+        [SettingsUIDisableByCondition(typeof(CimRejuvenatorSetting), nameof(IsDirectTrendModeDisabled))]
+        [SettingsUISlider(min = 10, max = 100, step = 5, scalarMultiplier = 1, unit = Unit.kPercentage)]
+        [SettingsUISection(kSection, kTrendGroup)]
+        public int DirectTrendCorrectionStrength { get; set; }
+
+        [SettingsUIDisableByCondition(typeof(CimRejuvenatorSetting), nameof(IsDirectTrendModeDisabled))]
+        [SettingsUISlider(min = 100, max = 250000, step = 1000, scalarMultiplier = 1, unit = Unit.kInteger)]
+        [SettingsUISection(kSection, kTrendGroup)]
+        public int DirectTrendMaxInjectedResidentsPerDay { get; set; }
+
+        [SettingsUIDisableByCondition(typeof(CimRejuvenatorSetting), nameof(IsAdaptiveTrendModeDisabled))]
         [SettingsUISlider(min = 10, max = 100, step = 5, scalarMultiplier = 1, unit = Unit.kPercentage)]
         [SettingsUISection(kSection, kTrendGroup)]
         public int TrendResponseStrength { get; set; }
@@ -221,7 +235,7 @@ namespace CimRejuvenator
         [SettingsUISection(kSection, kImmigrationGroup)]
         public int PopulationCeiling { get; set; }
 
-        [SettingsUIDisableByCondition(typeof(CimRejuvenatorSetting), nameof(IsImmigrationControlDisabled))]
+        [SettingsUIDisableByCondition(typeof(CimRejuvenatorSetting), nameof(IsIncomingAgeControlDisabled))]
         [SettingsUISection(kSection, kImmigrationGroup)]
         public bool ShapeNewResidentAges { get; set; }
 
@@ -331,6 +345,11 @@ namespace CimRejuvenator
         public string ImmigrationStatus => ImmigrationControlSystem.Status;
 
         [SettingsUISection(kSection, kStatsGroup)]
+        public string TrendMode => !EnablePopulationTrendControl
+            ? "Disabled"
+            : (DirectTrendMode ? "Direct" : "Adaptive");
+
+        [SettingsUISection(kSection, kStatsGroup)]
         public string TrendTarget => TargetNetPopulationChangePerDay.ToString("+0;-0;0") + "/day";
 
         [SettingsUISection(kSection, kStatsGroup)]
@@ -344,6 +363,18 @@ namespace CimRejuvenator
 
         [SettingsUISection(kSection, kStatsGroup)]
         public string TrendEffectiveBirthRate => PopulationTrendSystem.EffectiveBirthRatePercent.ToString("N0") + "%";
+
+        [SettingsUISection(kSection, kStatsGroup)]
+        public string TrendDirectCorrectionRequested => PopulationTrendSystem.DirectCorrectionRequestedLastDay.ToString("N0");
+
+        [SettingsUISection(kSection, kStatsGroup)]
+        public string TrendDirectResidentsToday => PopulationTrendSystem.DirectResidentsInjectedToday.ToString("N0");
+
+        [SettingsUISection(kSection, kStatsGroup)]
+        public string TrendDirectResidentsSession => PopulationTrendSystem.DirectResidentsInjectedSession.ToString("N0");
+
+        [SettingsUISection(kSection, kStatsGroup)]
+        public string TrendDirectHouseholdsToday => PopulationTrendSystem.DirectHouseholdsInjectedToday.ToString("N0");
 
         [SettingsUISection(kSection, kStatsGroup)]
         public string TrendForcedOutflowToday => PopulationTrendSystem.ForcedOutflowToday.ToString("N0");
@@ -380,12 +411,16 @@ namespace CimRejuvenator
         public bool IsSeniorShareDisabled() => IsRejuvenationDisabled() || !KeepMinimumSeniorShare;
         public bool IsDemographicBalancerDisabled() => !EnableMod || !EnableDemographicBalancer;
         public bool IsTrendControlDisabled() => !EnableMod || !EnablePopulationTrendControl;
+        public bool IsDirectTrendModeDisabled() => IsTrendControlDisabled() || !DirectTrendMode;
+        public bool IsAdaptiveTrendModeDisabled() => IsTrendControlDisabled() || DirectTrendMode;
         public bool IsTrendBirthControlDisabled() => IsTrendControlDisabled() || !TrendUseBirths;
         public bool IsForcedOutflowDisabled() => IsTrendControlDisabled() || !TrendAllowForcedOutflow;
         public bool IsImmigrationControlDisabled() => !EnableMod || !EnableImmigrationControl;
         public bool IsImmigrationDailyCapDisabled() => IsImmigrationControlDisabled() || !UseImmigrationDailyCap;
         public bool IsPopulationCeilingDisabled() => IsImmigrationControlDisabled() || !UsePopulationCeiling;
-        public bool IsIncomingAgeMixDisabled() => IsImmigrationControlDisabled() || !ShapeNewResidentAges;
+        public bool IsIncomingAgeControlDisabled() =>
+            !EnableMod || !(EnableImmigrationControl || (EnablePopulationTrendControl && DirectTrendMode));
+        public bool IsIncomingAgeMixDisabled() => IsIncomingAgeControlDisabled() || !ShapeNewResidentAges;
         public bool IsBirthControlDisabled() => !EnableMod || !EnableBirthControl;
         public bool IsBirthDailyCapDisabled() => IsBirthControlDisabled() || !UseBirthDailyCap;
 
@@ -412,6 +447,9 @@ namespace CimRejuvenator
 
             EnablePopulationTrendControl = false;
             TargetNetPopulationChangePerDay = 0;
+            DirectTrendMode = false;
+            DirectTrendCorrectionStrength = 100;
+            DirectTrendMaxInjectedResidentsPerDay = 50000;
             TrendResponseStrength = 50;
             TrendDeadband = 500;
             TrendUseImmigration = true;
