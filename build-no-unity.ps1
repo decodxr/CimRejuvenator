@@ -8,6 +8,20 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
     throw "dotnet was not found. Install the .NET SDK first."
 }
 
+[xml]$project = Get-Content (Join-Path $PSScriptRoot "CimRejuvenator.csproj")
+$version = $project.Project.PropertyGroup.Version | Select-Object -First 1
+$commit = "unknown"
+if (Get-Command git -ErrorAction SilentlyContinue) {
+    try {
+        $commit = (git -C $PSScriptRoot rev-parse --short HEAD 2>$null).Trim()
+    } catch {
+        $commit = "unknown"
+    }
+}
+
+Write-Host "[INFO] Project version: $version"
+Write-Host "[INFO] Source commit: $commit"
+
 $gamePath = $env:CSII_GAMEPATH
 $candidates = @(
     $gamePath,
@@ -39,6 +53,13 @@ Write-Host "[OK] Assemblies: $found\Cities2_Data\Managed" -ForegroundColor Green
 Write-Host "[INFO] The Unity editor and official modding toolchain are not used by this build." -ForegroundColor Cyan
 Write-Host ""
 
+foreach ($folder in @("bin", "obj", "dist")) {
+    $path = Join-Path $PSScriptRoot $folder
+    if (Test-Path $path) {
+        Remove-Item $path -Recurse -Force
+    }
+}
+
 dotnet build .\CimRejuvenator.csproj -c Release -p:ForceNoUnityBuild=true -p:CitiesSkylines2Path="$found"
 
 if ($LASTEXITCODE -ne 0) {
@@ -57,9 +78,22 @@ if ([string]::IsNullOrWhiteSpace($dll) -or -not (Test-Path $dll)) {
 }
 
 New-Item -ItemType Directory -Force -Path $distDir | Out-Null
-Copy-Item $dll (Join-Path $distDir "CimRejuvenator.dll") -Force
+$distDll = Join-Path $distDir "CimRejuvenator.dll"
+Copy-Item $dll $distDll -Force
+$sha = (Get-FileHash $distDll -Algorithm SHA256).Hash.ToLowerInvariant()
+
+@"
+Cim Rejuvenator
+Version: $version
+Commit: $commit
+SHA256: $sha
+Build mode: direct game assemblies on Windows
+"@ | Set-Content (Join-Path $distDir "BUILD_INFO.txt") -Encoding UTF8
 
 Write-Host ""
 Write-Host "BUILD COMPLETE" -ForegroundColor Green
+Write-Host "Version: $version" -ForegroundColor Green
+Write-Host "Commit: $commit" -ForegroundColor Green
+Write-Host "SHA256: $sha" -ForegroundColor Green
 Write-Host "DLL: $dll" -ForegroundColor Green
 Write-Host "Package: $distDir" -ForegroundColor Green
