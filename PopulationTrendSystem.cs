@@ -330,7 +330,7 @@ namespace CimRejuvenator
 
         private int ForceHouseholdsOut(int residentBudget, int day)
         {
-            if (residentBudget <= 0 || m_HouseholdQuery.IsEmptyIgnoreFilter)
+            if (residentBudget <= 0)
             {
                 return 0;
             }
