@@ -139,10 +139,7 @@ namespace CimRejuvenator
                 NewResidentsToday++;
                 NewResidentsSession++;
 
-                if (setting != null &&
-                    setting.EnableMod &&
-                    setting.EnableImmigrationControl &&
-                    setting.ShapeNewResidentAges)
+                if (PopulationTrendSystem.CanShapeIncomingAges(setting))
                 {
                     ShapeIncomingAge(setting, entity, ref citizen, day);
                     EntityManager.SetComponentData(entity, citizen);
