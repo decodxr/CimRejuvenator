@@ -19,7 +19,9 @@ git --version
 dotnet --version
 ```
 
-## Clone the repository
+## Clone or update the repository
+
+First clone:
 
 ```bash
 cd ~
@@ -27,65 +29,78 @@ git clone https://github.com/decodxr/CimRejuvenator.git
 cd CimRejuvenator
 ```
 
-For an existing checkout:
+Existing checkout:
 
 ```bash
 cd ~/CimRejuvenator
 git pull
 ```
 
-## Build
+Confirm the source version before building:
 
-Make the build script executable once:
+```bash
+grep '<Version>' CimRejuvenator.csproj
+```
+
+For the current release this should show `0.4.0`.
+
+## Build and deploy
+
+Make the script executable once:
 
 ```bash
 chmod +x build-no-unity-linux.sh
 ```
 
-Build the DLL:
-
-```bash
-./build-no-unity-linux.sh
-```
-
-The output is copied to:
-
-```text
-dist/CimRejuvenator/CimRejuvenator.dll
-```
-
-### Custom game path
-
-The script checks common Steam locations automatically. For a custom Steam Library, set `CSII_GAMEPATH` to the directory containing `Cities2_Data`:
-
-```bash
-export CSII_GAMEPATH="/path/to/steamapps/common/Cities Skylines II"
-./build-no-unity-linux.sh
-```
-
-The path is valid when this file exists:
-
-```text
-$CSII_GAMEPATH/Cities2_Data/Managed/Game.dll
-```
-
-## Build and deploy to Proton
-
-Close Cities: Skylines II before replacing a loaded code-mod DLL.
+Close Cities: Skylines II completely, then run:
 
 ```bash
 ./build-no-unity-linux.sh --deploy
 ```
 
-The script checks common Proton prefixes for Steam AppID `949230` and installs the DLL under:
+The script now:
+
+1. prints the project version and Git commit;
+2. removes old `bin`, `obj`, and `dist` directories;
+3. builds a fresh DLL against the installed game assemblies;
+4. writes `dist/CimRejuvenator/BUILD_INFO.txt`;
+5. replaces the local Proton mod directory;
+6. verifies the deployed DLL SHA-256 checksum;
+7. searches the game user-data directory for duplicate `CimRejuvenator.dll` files.
+
+A successful deployment ends with `DEPLOY COMPLETE` and a verified SHA-256 value.
+
+The default local install path is:
 
 ```text
-.../Cities Skylines II/Mods/CimRejuvenator/CimRejuvenator.dll
+~/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Mods/CimRejuvenator/
+```
+
+It should contain:
+
+```text
+CimRejuvenator.dll
+BUILD_INFO.txt
+```
+
+### Custom game path
+
+If Cities: Skylines II is stored in another Steam Library:
+
+```bash
+export CSII_GAMEPATH="/path/to/steamapps/common/Cities Skylines II"
+./build-no-unity-linux.sh --deploy
+```
+
+The game path is valid when this file exists:
+
+```text
+$CSII_GAMEPATH/Cities2_Data/Managed/Game.dll
 ```
 
 ### Custom Proton user-data path
 
-If the prefix is in a custom location, set `CSII_USER_DATA` to the directory containing the game's `Logs`, settings, and local `Mods` directory:
+Set `CSII_USER_DATA` to the directory containing the game's `Logs`, settings, and local `Mods` directory:
 
 ```bash
 export CSII_USER_DATA="/path/to/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II"
@@ -94,11 +109,59 @@ export CSII_USER_DATA="/path/to/compatdata/949230/pfx/drive_c/users/steamuser/Ap
 
 Do not install local development DLLs under `.cache/Mods/pdx_mods`; that directory is managed by Paradox Mods.
 
-## First v0.3.0 test
+## If the Options page still looks old
 
-Start with population control features disabled except rejuvenation. Confirm the population census updates before enabling the new controllers.
+Version 0.4.0 adds a static row in **General** named:
 
-Suggested first test:
+```text
+Loaded build version
+```
+
+It must show:
+
+```text
+0.4.0
+```
+
+If that row does not exist, the currently displayed Options page did not come from the v0.4.0 settings class.
+
+Check the deployed build metadata:
+
+```bash
+cat "$HOME/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Mods/CimRejuvenator/BUILD_INFO.txt"
+```
+
+Find every DLL copy under the user-data directory:
+
+```bash
+find "$HOME/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II" \
+  -type f -name 'CimRejuvenator.dll' -print
+```
+
+Then check what the game actually loaded:
+
+```bash
+grep -RniE "Loaded CimRejuvenator|Loading Cim Rejuvenator|Loaded from" \
+"$HOME/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Logs" \
+| tail -100
+```
+
+For v0.4.0, the mod log should contain:
+
+```text
+Loading Cim Rejuvenator v0.4.0
+Registered population management, flow, trend, birth-rate, and immigration systems.
+```
+
+If an old process is still running, close the game and verify it is gone before rebuilding:
+
+```bash
+pgrep -af 'Cities2|Cities.*Skylines'
+```
+
+## First v0.4.0 test
+
+Start with the controllers disabled except rejuvenation:
 
 ```text
 Enable Cim Rejuvenator:             Yes
@@ -109,13 +172,18 @@ Maximum rejuvenations/sweep:        5,000
 Population sweeps/day:              64
 
 Demographic balancer:               No
+Population trend controller:        No
 Immigration control:                No
 Birth control:                      No
 ```
 
-After the census is updating, enable one new controller at a time.
+Run the simulation and verify that **Statistics** reports the established resident population and age groups.
 
-A reasonable demographic target is:
+Then enable one controller at a time.
+
+## Demographic balancing
+
+A reasonable starting target is:
 
 ```text
 Child:      15
@@ -124,7 +192,63 @@ Adult:      60
 Elderly:    15
 ```
 
-The four target values are relative weights and are normalized automatically.
+The four values are relative weights and are normalized automatically.
+
+Start with a modest conversion limit:
+
+```text
+Maximum age conversions/sweep: 2,000-5,000
+Protect employed Adults:       Yes
+```
+
+The balancer skips residents currently travelling or enrolled as students.
+
+## Population trend control
+
+The new **Population Trend** group controls the net resident trend.
+
+A stable-population test:
+
+```text
+Enable population trend controller: Yes
+Target net population change/day:   0
+Response strength:                  50%
+Trend deadband:                     500
+Use immigration:                    Yes
+Use births:                         Yes
+Maximum automatic birth rate:       250%
+Allow forced outflow:               No
+```
+
+A growth target:
+
+```text
+Target net population change/day: +2,000
+```
+
+A decline target:
+
+```text
+Target net population change/day: -1,000
+```
+
+For negative targets, immigration and births can be suppressed. Actual forced resident removal only occurs when **Allow forced outflow for negative targets** is enabled. Keep it off until the positive/neutral controller has been tested successfully on the save.
+
+The Statistics section shows:
+
+- configured trend target;
+- actual population change from the latest complete simulation day;
+- smoothed population trend;
+- trend-selected immigration intensity;
+- trend-selected birth-rate multiplier;
+- forced-outflow counters;
+- controller status.
+
+The controller needs at least one complete simulation-day transition after activation to establish a useful trend sample.
+
+## Birth-controller compatibility
+
+Do not run another fertility/birth-rate controller at the same time as Cim Rejuvenator's birth control or the trend controller's birth channel. Mods that write the same `CitizenParametersData` fields can overwrite each other depending on update order.
 
 ## Logs
 
@@ -134,18 +258,12 @@ The default Proton log directory is usually:
 ~/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Logs
 ```
 
-Check Cim Rejuvenator messages:
+Check the main systems:
 
 ```bash
-grep -RniE "CimRejuvenator|PopulationManagementSystem|PopulationFlowSystem|BirthRateControlSystem|ImmigrationControlSystem|Exception|ERROR" \
+grep -RniE "CimRejuvenator|PopulationManagementSystem|PopulationFlowSystem|PopulationTrendSystem|BirthRateControlSystem|ImmigrationControlSystem|Exception|ERROR" \
 "$HOME/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Logs" \
-| tail -250
-```
-
-The mod-specific log is normally:
-
-```text
-.../Cities Skylines II/Logs/CimRejuvenator.log
+| tail -300
 ```
 
 ## Build failures
@@ -156,9 +274,9 @@ Save a complete build log with:
 ./build-no-unity-linux.sh > build-error.txt 2>&1
 ```
 
-A `CSxxxx` compiler error usually means a game API field, namespace, or type differs from the version targeted by the current source. The direct build deliberately uses the installed game's assemblies, so these errors expose compatibility changes immediately.
+A `CSxxxx` compiler error usually means a game API field, namespace, or type differs from the version targeted by the current source. The direct build uses the installed game's assemblies, so compatibility differences appear immediately at compile time.
 
-## Updating a local installation
+## Updating later
 
 With the game closed:
 
@@ -168,4 +286,4 @@ git pull
 ./build-no-unity-linux.sh --deploy
 ```
 
-Restart the game after deployment.
+Restart the game after deployment and confirm the **Loaded build version** row before testing new features.
