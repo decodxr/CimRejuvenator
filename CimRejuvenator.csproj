@@ -7,7 +7,7 @@
     <RootNamespace>CimRejuvenator</RootNamespace>
     <LangVersion>9.0</LangVersion>
     <Configurations>Debug;Release</Configurations>
-    <Version>0.6.0</Version>
+    <Version>0.6.1</Version>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
