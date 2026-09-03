@@ -1,8 +1,8 @@
 # Cim Rejuvenator
 
-Cim Rejuvenator is a population-management code mod for **Cities: Skylines II**. It provides configurable rejuvenation, demographic balancing, immigration control, birth-rate control, incoming age shaping, population limits, population-trend control, and live statistics.
+Cim Rejuvenator is a population-management code mod for **Cities: Skylines II**. It provides configurable rejuvenation, demographic balancing, immigration control, birth-rate control, incoming age shaping, population limits, direct or adaptive population-trend control, and live statistics.
 
-> **Experimental release:** back up important saves before enabling direct life-stage conversion or forced population outflow. Version 0.4.0 changes citizen life stages and simulation parameters at runtime.
+> **Experimental release:** back up important saves before enabling large-scale life-stage conversion, direct population compensation, or forced population outflow. Version 0.5.0 can change citizen life stages, population parameters, and household inflow at runtime.
 
 ## Features
 
@@ -18,87 +18,119 @@ Cim Rejuvenator is a population-management code mod for **Cities: Skylines II**.
 
 ### Demographic balancer
 
-The established resident population can be moved gradually toward four configurable target weights:
+The established resident population can be moved gradually toward configurable Child, Teen, Adult, and Elderly target weights. The weights are normalized automatically and do not need to total 100. The default profile is `15 / 10 / 60 / 15`.
 
-- Child
-- Teen
-- Adult
-- Elderly
-
-The weights are normalized automatically, so they do not need to total 100. The default profile is `15 / 10 / 60 / 15`.
-
-Additional controls include:
-
-- Maximum life-stage conversions per sweep.
-- Worker protection to avoid converting employed Adults into non-working life stages.
-- Active-trip and enrolled-student protection.
-- Manual `BALANCE NOW` action.
+Additional controls include a maximum life-stage conversion count per sweep, worker protection, active-trip and enrolled-student protection, and a manual `BALANCE NOW` action.
 
 ### Population trend controller
 
-Version 0.4.0 adds a feedback controller for net population movement. The target can range from **-100,000 to +100,000 residents per simulation day**.
-
-Examples:
+The target can range from **-100,000 to +100,000 established residents per simulation day**.
 
 ```text
 +5,000/day   Target strong growth
 +1,000/day   Target moderate growth
-0/day        Target a roughly stable population
+0/day        Target a stable population
 -1,000/day   Target gradual decline
 ```
 
-The controller measures the resident change once per simulation day, smooths the result, and can automatically adjust:
+Two control modes are available.
+
+#### Adaptive mode
+
+Adaptive mode is the less invasive controller. It measures the resident change once per simulation day, smooths the result, and adjusts controllable rates over time:
 
 - resident immigration intensity;
-- the birth-rate multiplier;
+- birth-rate multiplier;
 - optional household outflow for negative targets.
 
-Forced outflow is **disabled by default**. With it disabled, a negative target only suppresses controllable inflow and does not forcibly remove residents. When enabled, the controller can mark moved-in resident households to leave the city, subject to a configurable daily soft cap.
+This mode steers the simulation but cannot guarantee that deaths or other losses will be replaced immediately.
 
-Other trend controls include response strength, deadband, a maximum automatic birth-rate multiplier, and a controller reset action.
+#### Direct trend compensation
+
+Direct mode is intended for cities that keep losing population even with immigration and births at high settings.
+
+At the end of each complete simulation day, direct mode compares the **actual established-resident change** with the selected target. When the city is below target, it schedules normal vanilla resident households to compensate the measured shortfall.
+
+Example:
+
+```text
+Target:             0/day
+Actual last day: -5,000/day
+Correction:      +5,000 residents at 100% correction strength
+```
+
+Another example:
+
+```text
+Target:          +2,000/day
+Actual last day: -3,000/day
+Correction:      +5,000 residents at 100% correction strength
+```
+
+Direct mode uses normal household prefabs, outside connections, `PrefabRef`, `CurrentBuilding`, and the game's household initialization pipeline. It does **not** create standalone citizen entities manually. The displayed direct-resident count is therefore an estimate based on the selected household prefab composition; the game still performs household initialization and moving-in normally.
+
+Direct controls include:
+
+- correction strength from 10% to 100%;
+- maximum direct correction up to **250,000 estimated residents per simulation day**;
+- optional immigration and birth-rate assist channels;
+- optional population ceiling;
+- incoming age shaping for directly injected households;
+- optional forced outflow when growth is above a negative or lower target.
+
+At 100% correction strength, the controller attempts to compensate the full measured shortfall, subject to the direct daily cap, deadband, population ceiling, available household prefabs, and outside connections.
+
+Forced outflow is **disabled by default**. If the city grows faster than the selected target while forced outflow is disabled, direct mode only throttles the assist channels rather than deleting residents.
+
+Large direct corrections can create immediate housing, traffic, employment, education, and service demand. Start with a moderate daily cap on an important save.
 
 ### Immigration control
 
 - Immigration intensity from 0% to 100%.
-- Optional soft daily cap for new resident citizens.
+- Optional soft daily cap for new residents.
 - Optional resident population ceiling.
 - Incoming age-mix shaping with separate Child, Teen, Adult, and Elderly weights.
-- Live immigration status in the statistics section.
+- Live immigration status.
 
-Immigration control gates the game's resident `HouseholdSpawnSystem`. Daily limits are soft limits: work already in progress can finish slightly above a selected cap.
+Manual immigration control gates the game's resident `HouseholdSpawnSystem`. Work already in progress can finish slightly above a selected soft cap.
 
-When population-trend immigration control is active, the trend controller supplies the effective immigration intensity. Manual caps and the population ceiling still belong to the manual immigration controller.
+When trend immigration control is active, the trend controller supplies the effective immigration intensity. In direct mode, immigration can be used as an assist channel while direct household compensation handles measured shortfalls.
 
 ### Birth control
 
 - Birth-rate multiplier from 0% to 500%.
 - Optional soft daily birth cap.
-- Optional automatic pause when the Child population reaches the configured demographic target.
-- Live display of the currently applied birth-rate multiplier.
+- Optional pause when the Child population reaches the configured demographic target.
+- Live display of the applied birth-rate multiplier.
 
 The controller scales `CitizenParametersData.m_BaseBirthRate` and `m_AdultFemaleBirthRateBonus`. Original values are captured and restored when control is released.
 
-When population-trend birth control is active, the trend controller supplies the effective birth-rate multiplier, bounded by the configured automatic maximum.
-
 ### Population statistics
 
-The Options panel reports:
+The Options panel reports the loaded DLL version, resident census by life stage, rejuvenation and demographic conversion counters, detected births and incoming residents, birth and immigration controller state, trend target and measured change, effective trend rates, direct correction request, direct residents and households scheduled, forced outflow, and population sweep counters.
 
-- loaded DLL version;
-- established resident population;
-- Child, Teen, Adult, and Elderly counts and percentages;
-- rejuvenation and demographic-conversion counters;
-- detected births and incoming residents;
-- effective birth-rate multiplier;
-- immigration-controller status;
-- population-trend target, last daily change, and smoothed change;
-- trend-selected immigration and birth rates;
-- forced-outflow counters;
-- population sweep count and last scanned simulation day.
+## Recommended profiles
 
-## Recommended starting profile
+### Severe population-loss recovery
 
-For recovery from a severe elderly population wave:
+For a city that is actively losing residents despite normal immigration:
+
+```text
+Population trend control:                On
+Direct trend compensation:               On
+Target net population change/day:        0 to +2,000
+Direct correction strength:              100%
+Maximum direct residents/day:            25,000 to 50,000
+Trend deadband:                          0 to 100
+Use immigration for trend control:       On
+Use births for trend control:            On
+Maximum automatic birth rate:            250-300%
+Forced outflow:                          Off
+```
+
+If the loss wave is extremely large, raise the direct daily cap gradually rather than immediately selecting 250,000.
+
+### Elderly-wave recovery
 
 ```text
 Rejuvenation enabled:              Yes
@@ -127,10 +159,11 @@ Elderly:    15
 
 Enable the demographic balancer with a modest conversion limit, such as 2,000-5,000 per sweep, before trying higher values.
 
-For a stable-population experiment after the census has settled:
+### Adaptive stable-population control
 
 ```text
 Population trend control:          On
+Direct trend compensation:         Off
 Target net change/day:             0
 Response strength:                 40-50%
 Deadband:                          500
@@ -160,7 +193,7 @@ For later updates:
 
 ```bash
 cd ~/CimRejuvenator
-git pull
+git pull --ff-only
 ./build-no-unity-linux.sh --deploy
 ```
 
@@ -182,10 +215,10 @@ See [TUTORIAL-WINDOWS.md](TUTORIAL-WINDOWS.md) for alternate Steam Library paths
 
 ## Verifying that the current DLL is loaded
 
-If the Options page still looks like an older release, first check **Loaded build version** under General. Version 0.4.0 must report:
+Under **Options -> Cim Rejuvenator -> General**, **Loaded build version** should report:
 
 ```text
-0.4.0
+0.5.0
 ```
 
 The deployed package also contains:
@@ -201,7 +234,7 @@ find "$HOME/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/ste
   -type f -name 'CimRejuvenator.dll' -print
 ```
 
-A second local or cached copy can make debugging version mismatches difficult. Fully close Cities: Skylines II before replacing a code-mod DLL and restart the game after deployment.
+Fully close Cities: Skylines II before replacing a code-mod DLL and restart the game after deployment.
 
 ## Local Linux installation
 
@@ -223,9 +256,11 @@ Do not install local development DLLs inside `.cache/Mods/pdx_mods`; that direct
 
 Cim Rejuvenator changes population-related systems and parameters. Mods that modify the same areas can override each other depending on update order.
 
-Avoid enabling two birth/fertility controllers at the same time. Any mod that writes `CitizenParametersData.m_BaseBirthRate` or `m_AdultFemaleBirthRateBonus` overlaps with Cim Rejuvenator's birth controller and the birth channel of population-trend control.
+Avoid enabling two birth/fertility controllers at the same time. Any mod that writes `CitizenParametersData.m_BaseBirthRate` or `m_AdultFemaleBirthRateBonus` overlaps with Cim Rejuvenator's birth controller and trend birth channel.
 
 Immigration-control mods that enable or disable `HouseholdSpawnSystem` overlap with this mod's immigration controller and trend immigration channel.
+
+Direct trend compensation adds ordinary household entities through the vanilla household initialization path. Mods that replace household spawning or initialization may therefore alter its results.
 
 The demographic balancer preserves household identity and the citizen entity, but changing life stage can still affect employment, school demand, transport patterns, and household behaviour.
 
@@ -242,6 +277,8 @@ Adult -> Elderly:    84 days
 Population management uses living residents in moved-in households and excludes tourists, commuters, and households already moving away.
 
 Incoming-resident tracking establishes a baseline when the system starts, then detects new resident entities. Newborn detection uses newly created Child residents whose calculated age is zero days. These are mod-side flow counters and may not exactly match every vanilla UI counter at the same frame.
+
+Direct trend compensation intentionally works at the household level. The controller schedules a vanilla household archetype at an outside connection, after which normal household initialization creates and manages its citizens.
 
 ## Logs
 
