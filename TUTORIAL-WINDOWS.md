@@ -20,7 +20,9 @@ git --version
 dotnet --version
 ```
 
-## Clone the repository
+## Clone or update the repository
+
+First clone:
 
 ```powershell
 cd C:\Users\$env:USERNAME
@@ -28,12 +30,20 @@ git clone https://github.com/decodxr/CimRejuvenator.git
 cd CimRejuvenator
 ```
 
-For an existing checkout:
+Existing checkout:
 
 ```powershell
 cd C:\Users\$env:USERNAME\CimRejuvenator
 git pull
 ```
+
+Confirm the current project version:
+
+```powershell
+Select-String '<Version>' .\CimRejuvenator.csproj
+```
+
+The current release should report `0.4.0`.
 
 ## PowerShell execution policy
 
@@ -57,7 +67,16 @@ The checker reports whether the direct-assembly build, the official toolchain bu
 .\build-no-unity.ps1
 ```
 
-The script checks common Steam Library locations. For a custom library, set `CSII_GAMEPATH`:
+The direct-build script removes previous `bin`, `obj`, and `dist` output before compiling, then writes:
+
+```text
+dist\CimRejuvenator\CimRejuvenator.dll
+dist\CimRejuvenator\BUILD_INFO.txt
+```
+
+`BUILD_INFO.txt` records the project version, source commit, and SHA-256 checksum.
+
+For a custom Steam Library, set `CSII_GAMEPATH`:
 
 ```powershell
 $env:CSII_GAMEPATH="D:\SteamLibrary\steamapps\common\Cities Skylines II"
@@ -68,12 +87,6 @@ The path is valid when this file exists:
 
 ```text
 %CSII_GAMEPATH%\Cities2_Data\Managed\Game.dll
-```
-
-The packaged DLL is written to:
-
-```text
-dist\CimRejuvenator\CimRejuvenator.dll
 ```
 
 ## Official toolchain build
@@ -88,10 +101,10 @@ The official toolchain is useful for the standard Cities: Skylines II publishing
 
 ## Copying a Windows build to Linux / Proton
 
-Copy:
+Copy both files from:
 
 ```text
-dist\CimRejuvenator\CimRejuvenator.dll
+dist\CimRejuvenator\
 ```
 
 to the local mod directory in the Proton prefix:
@@ -100,15 +113,24 @@ to the local mod directory in the Proton prefix:
 ~/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Mods/CimRejuvenator/
 ```
 
-The final path should be:
+The final directory should contain:
 
 ```text
-.../Mods/CimRejuvenator/CimRejuvenator.dll
+CimRejuvenator.dll
+BUILD_INFO.txt
 ```
 
 Do not place local development DLLs under `.cache/Mods/pdx_mods`; that directory is managed by Paradox Mods.
 
-## First v0.3.0 test
+## First v0.4.0 test
+
+The **General** group should show:
+
+```text
+Loaded build version: 0.4.0
+```
+
+If that row is missing, an older DLL is being loaded or the game has not been fully restarted since the DLL was replaced.
 
 Confirm the resident census and rejuvenation system first, then enable the new controllers individually.
 
@@ -124,6 +146,7 @@ Maximum rejuvenations/sweep:        5,000
 Population sweeps/day:              64
 
 Demographic balancer:               No
+Population trend controller:        No
 Immigration control:                No
 Birth control:                      No
 ```
@@ -138,6 +161,21 @@ Elderly:    15
 ```
 
 The four target values are normalized automatically.
+
+A conservative population-trend test is:
+
+```text
+Population trend controller:        Yes
+Target net change/day:              0
+Response strength:                  50%
+Deadband:                           500
+Use immigration:                    Yes
+Use births:                         Yes
+Maximum automatic birth rate:       250%
+Forced outflow:                     No
+```
+
+The controller needs at least one complete simulation-day transition after activation to establish a useful trend sample.
 
 ## Build failures
 
@@ -158,4 +196,4 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\build-no-unity.ps1
 ```
 
-Close Cities: Skylines II before replacing a loaded code-mod DLL.
+Close Cities: Skylines II before replacing a loaded code-mod DLL, then restart it and confirm the loaded build version in Options.
