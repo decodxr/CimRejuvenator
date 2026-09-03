@@ -12,7 +12,8 @@ namespace CimRejuvenator
     public partial class PopulationFlowSystem : GameSystemBase
     {
         public const int FramesPerDay = 262144;
-        public const int ChecksPerDay = 512;
+        public const int ChecksPerDay = 128;
+        private const int PruneEveryChecks = 32;
 
         public static int BirthsToday { get; private set; }
         public static int BirthsSession { get; private set; }
@@ -21,11 +22,12 @@ namespace CimRejuvenator
 
         private static int s_CurrentDay = int.MinValue;
 
-        private readonly HashSet<long> m_KnownCitizens = new HashSet<long>();
+        private readonly HashSet<long> m_KnownResidents = new HashSet<long>();
         private SimulationSystem m_SimulationSystem;
         private EntityQuery m_CitizenQuery;
         private EntityQuery m_TimeDataQuery;
         private bool m_BaselineReady;
+        private int m_CheckCounter;
 
         public static void EnsureDay(int day)
         {
@@ -54,7 +56,11 @@ namespace CimRejuvenator
             m_SimulationSystem = World.GetOrCreateSystemManaged<SimulationSystem>();
             m_CitizenQuery = GetEntityQuery(new EntityQueryDesc
             {
-                All = new[] { ComponentType.ReadWrite<Citizen>() },
+                All = new[]
+                {
+                    ComponentType.ReadWrite<Citizen>(),
+                    ComponentType.ReadOnly<HouseholdMember>(),
+                },
                 None = new[]
                 {
                     ComponentType.ReadOnly<Deleted>(),
@@ -85,28 +91,37 @@ namespace CimRejuvenator
             {
                 for (var i = 0; i < entities.Length; i++)
                 {
-                    m_KnownCitizens.Add(EntityKey(entities[i]));
+                    if (IsLivingResident(entities[i], citizens[i]))
+                    {
+                        m_KnownResidents.Add(EntityKey(entities[i]));
+                    }
                 }
 
                 m_BaselineReady = true;
                 citizens.Dispose();
                 entities.Dispose();
-                Mod.Log.Info($"Population flow baseline initialized with {m_KnownCitizens.Count:N0} citizens.");
+                Mod.Log.Info($"Population flow baseline initialized with {m_KnownResidents.Count:N0} residents.");
                 return;
             }
 
+            m_CheckCounter++;
+            var prune = m_CheckCounter % PruneEveryChecks == 0;
+            HashSet<long> currentResidents = prune ? new HashSet<long>() : null;
             var setting = Mod.Setting;
 
             for (var i = 0; i < entities.Length; i++)
             {
                 var entity = entities[i];
-                if (!m_KnownCitizens.Add(EntityKey(entity)))
+                var citizen = citizens[i];
+                if (!IsLivingResident(entity, citizen))
                 {
                     continue;
                 }
 
-                var citizen = citizens[i];
-                if (!IsLivingResident(entity, citizen))
+                var key = EntityKey(entity);
+                currentResidents?.Add(key);
+
+                if (!m_KnownResidents.Add(key))
                 {
                     continue;
                 }
@@ -132,6 +147,11 @@ namespace CimRejuvenator
                     ShapeIncomingAge(setting, entity, ref citizen, day);
                     EntityManager.SetComponentData(entity, citizen);
                 }
+            }
+
+            if (prune && currentResidents != null)
+            {
+                m_KnownResidents.RemoveWhere(key => !currentResidents.Contains(key));
             }
 
             citizens.Dispose();
@@ -178,6 +198,11 @@ namespace CimRejuvenator
                 EntityManager.RemoveComponent<Worker>(entity);
             }
 
+            if (targetAge == CitizenAge.Child || targetAge == CitizenAge.Teen)
+            {
+                citizen.m_State &= ~CitizenFlags.LookingForPartner;
+            }
+
             citizen.SetAge(targetAge);
             citizen.m_BirthDay = PopulationManagementSystem.ToBirthDay(
                 day,
@@ -191,13 +216,28 @@ namespace CimRejuvenator
                 return false;
             }
 
-            if (!EntityManager.HasComponent<HealthProblem>(entity))
+            if (EntityManager.HasComponent<HealthProblem>(entity))
             {
-                return true;
+                var problem = EntityManager.GetComponentData<HealthProblem>(entity);
+                if ((problem.m_Flags & HealthProblemFlags.Dead) != 0)
+                {
+                    return false;
+                }
             }
 
-            var problem = EntityManager.GetComponentData<HealthProblem>(entity);
-            return (problem.m_Flags & HealthProblemFlags.Dead) == 0;
+            if (!EntityManager.HasComponent<HouseholdMember>(entity))
+            {
+                return false;
+            }
+
+            var member = EntityManager.GetComponentData<HouseholdMember>(entity);
+            if (!EntityManager.Exists(member.m_Household) || !EntityManager.HasComponent<Household>(member.m_Household))
+            {
+                return false;
+            }
+
+            var household = EntityManager.GetComponentData<Household>(member.m_Household);
+            return (household.m_Flags & HouseholdFlags.MovedIn) != 0;
         }
 
         private static long EntityKey(Entity entity)
