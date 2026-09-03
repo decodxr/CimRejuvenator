@@ -1,6 +1,6 @@
 # Architecture
 
-Cim Rejuvenator is split into five simulation systems so population conversion, flow tracking, trend feedback, birth-rate control, and immigration gating remain separated.
+Cim Rejuvenator is split into five simulation systems so population conversion, flow tracking, trend control, birth-rate control, and immigration gating remain separated.
 
 ## PopulationManagementSystem
 
@@ -29,33 +29,46 @@ The first update establishes a baseline. Later newly detected living residents i
 - newborns when they are Child residents with calculated age zero;
 - incoming residents otherwise.
 
-When incoming age shaping is enabled, newly detected incoming residents are reassigned using the configured life-stage weights.
+When incoming age shaping is enabled, newly detected incoming residents are reassigned using the configured life-stage weights. Age shaping can apply to manual immigration control and to households introduced by direct population-trend compensation.
 
-The scanner runs less frequently than the scheduler used by population management and periodically prunes entity IDs that no longer belong to active resident entities. This keeps the session-local tracking set bounded over long play sessions.
-
-Daily birth and immigration limits are soft caps. Detection happens after entities are created, so a household or birth operation already in progress can finish beyond the selected threshold.
+The scanner periodically prunes entity IDs that no longer belong to active resident entities. Daily birth and immigration limits are soft caps because detection happens after entities are created.
 
 ## PopulationTrendSystem
 
-Implements feedback control over the net established-resident population change.
+Controls the net established-resident population change across complete simulation-day transitions.
 
-Once enabled, the controller establishes a population baseline and then samples the resident change across complete simulation-day transitions. The measured change is smoothed using an exponential moving average before control adjustments are made.
+The system supports two modes.
 
-Inputs:
+### Adaptive mode
 
-- target net resident change per simulation day;
-- response strength;
-- deadband;
-- enabled control channels.
-
-Positive and neutral targets can adjust:
+Adaptive mode records the daily resident change, maintains an exponential moving average, and adjusts enabled control channels toward the selected target:
 
 - effective immigration intensity;
-- effective birth-rate multiplier.
+- effective birth-rate multiplier;
+- optional forced household outflow for negative targets.
 
-Negative targets first suppress enabled inflow channels. Optional forced outflow can additionally add `MovingAway` to moved-in resident households until a soft daily resident budget is reached. Forced outflow is disabled by default.
+It keeps the base game's normal demand-driven population flow and is therefore the less invasive mode, but large death waves can still overwhelm the available inflow.
 
-The trend controller does not create citizens or households directly. It delegates birth and immigration effects to the existing controllers so the base game's spawning and birth pipelines remain in use.
+### Direct compensation mode
+
+Direct mode compares the latest complete day's actual resident change directly with `TargetNetPopulationChangePerDay`.
+
+If the city is below target, the shortfall is converted into a resident correction budget. Correction strength controls how much of that shortfall is addressed, and a separate daily safety cap limits the maximum estimated residents that can be scheduled.
+
+The system does not construct standalone citizen entities. Instead it mirrors the vanilla resident household entry path:
+
+1. query normal household prefabs with `ArchetypeData` and `HouseholdData`, excluding `DynamicHousehold`;
+2. select household prefabs using their normal `m_Weight`, while estimating resident count from Child, Adult, Elder, and Student members;
+3. create the household using the prefab's archetype;
+4. set `PrefabRef`;
+5. add `CurrentBuilding` pointing to a valid outside connection;
+6. leave citizen creation and household initialization to the game's normal `HouseholdInitializeSystem` pipeline.
+
+The correction counters are therefore estimates/scheduled counts until vanilla household initialization and moving-in complete.
+
+If actual growth is already above the selected target, direct mode can throttle its immigration and birth assist channels. Direct removal remains opt-in through the existing forced-outflow setting.
+
+A configured manual population ceiling is also respected by direct positive correction when manual immigration control is enabled.
 
 ## BirthRateControlSystem
 
@@ -82,7 +95,7 @@ The effective spawn gate combines:
 - optional manual daily new-resident cap;
 - optional manual resident population ceiling.
 
-Intensity is implemented as a deterministic duty cycle over household-spawn opportunities. This avoids replacing the game's household creation pipeline and leaves housing selection, household initialization, property seeking, and outside-connection behaviour to the base game.
+Intensity is implemented as a deterministic duty cycle over household-spawn opportunities. This leaves housing selection, household initialization, property seeking, and outside-connection behaviour to the base game for ordinary immigration.
 
 When the system first takes control it stores the existing `HouseholdSpawnSystem.Enabled` state. That state is restored when control is released instead of assuming the correct previous value was always `true`.
 
@@ -103,6 +116,8 @@ Direct-assembly build scripts remove previous build products before compilation 
 Birth control overlaps with mods that write the same `CitizenParametersData` fields.
 
 Immigration control overlaps with mods that directly enable or disable `HouseholdSpawnSystem`.
+
+Direct trend compensation uses the vanilla household prefab/archetype initialization path. Mods that replace household spawning, household prefabs, outside-connection behavior, or household initialization can alter its results.
 
 Demographic balancing changes life stages on existing entities. It preserves the entity and household links, but downstream simulation systems can react to the new life stage by changing employment, education, travel, and service demand.
 
