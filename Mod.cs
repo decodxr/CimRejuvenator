@@ -27,10 +27,9 @@ namespace CimRejuvenator
             }
 
             Setting = new CimRejuvenatorSetting(this);
-            Setting.RegisterInOptionsUI();
-
             GameManager.instance.localizationManager.AddSource("en-US", new LocaleEN(Setting));
             AssetDatabase.global.LoadSettings(ModId, Setting, new CimRejuvenatorSetting(this));
+            Setting.RegisterInOptionsUI();
 
             updateSystem.UpdateAt<PopulationManagementSystem>(SystemUpdatePhase.GameSimulation);
             updateSystem.UpdateAt<PopulationFlowSystem>(SystemUpdatePhase.GameSimulation);
