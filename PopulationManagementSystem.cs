@@ -318,8 +318,6 @@ namespace CimRejuvenator
                     break;
                 }
 
-                // Avoid rewriting life stage while the citizen is in an active trip or enrolled.
-                // Those transitions have additional vanilla side effects that should be allowed to finish normally.
                 if (EntityManager.HasComponent<TravelPurpose>(entity) || EntityManager.HasComponent<Student>(entity))
                 {
                     continue;
@@ -429,6 +427,11 @@ namespace CimRejuvenator
 
             var member = EntityManager.GetComponentData<HouseholdMember>(entity);
             if (!EntityManager.Exists(member.m_Household) || !EntityManager.HasComponent<Household>(member.m_Household))
+            {
+                return false;
+            }
+
+            if (EntityManager.HasComponent<Game.Agents.MovingAway>(member.m_Household))
             {
                 return false;
             }
