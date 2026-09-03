@@ -236,6 +236,11 @@ namespace CimRejuvenator
                 return false;
             }
 
+            if (EntityManager.HasComponent<Game.Agents.MovingAway>(member.m_Household))
+            {
+                return false;
+            }
+
             var household = EntityManager.GetComponentData<Household>(member.m_Household);
             return (household.m_Flags & HouseholdFlags.MovedIn) != 0;
         }
