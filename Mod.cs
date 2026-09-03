@@ -9,7 +9,7 @@ namespace CimRejuvenator
     public sealed class Mod : IMod
     {
         public const string ModId = "CimRejuvenator";
-        public const string Version = "0.3.0";
+        public const string Version = "0.4.0";
 
         public static readonly ILog Log = LogManager
             .GetLogger(ModId)
@@ -34,8 +34,11 @@ namespace CimRejuvenator
 
             updateSystem.UpdateAt<PopulationManagementSystem>(SystemUpdatePhase.GameSimulation);
             updateSystem.UpdateAt<PopulationFlowSystem>(SystemUpdatePhase.GameSimulation);
+            updateSystem.UpdateAt<PopulationTrendSystem>(SystemUpdatePhase.GameSimulation);
             updateSystem.UpdateAt<BirthRateControlSystem>(SystemUpdatePhase.GameSimulation);
             updateSystem.UpdateAt<ImmigrationControlSystem>(SystemUpdatePhase.GameSimulation);
+
+            Log.Info("Registered population management, flow, trend, birth-rate, and immigration systems.");
         }
 
         public void OnDispose()
