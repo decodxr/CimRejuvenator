@@ -1,3 +1,4 @@
+using System;
 using Colossal.IO.AssetDatabase;
 using Colossal.Logging;
 using Game;
@@ -9,7 +10,7 @@ namespace CimRejuvenator
     public sealed class Mod : IMod
     {
         public const string ModId = "CimRejuvenator";
-        public const string Version = "0.5.0";
+        public const string Version = "0.6.0";
 
         public static readonly ILog Log = LogManager
             .GetLogger(ModId)
@@ -27,8 +28,7 @@ namespace CimRejuvenator
             }
 
             Setting = new CimRejuvenatorSetting(this);
-            GameManager.instance.localizationManager.AddSource("en-US", new LocaleEN(Setting));
-            GameManager.instance.localizationManager.AddSource("en-US", new LocaleDirectEN(Setting));
+            RegisterLocalization();
             AssetDatabase.global.LoadSettings(ModId, Setting, new CimRejuvenatorSetting(this));
             Setting.RegisterInOptionsUI();
 
@@ -39,6 +39,27 @@ namespace CimRejuvenator
             updateSystem.UpdateAt<ImmigrationControlSystem>(SystemUpdatePhase.GameSimulation);
 
             Log.Info("Registered population management, flow, trend, birth-rate, and immigration systems.");
+        }
+
+        private static void RegisterLocalization()
+        {
+            var manager = GameManager.instance.localizationManager;
+
+            foreach (var localeId in manager.GetSupportedLocales())
+            {
+                if (localeId.StartsWith("pt", StringComparison.OrdinalIgnoreCase))
+                {
+                    manager.AddSource(localeId, new LocalePTBR(Setting));
+                    Log.Info($"Registered Portuguese localization for {localeId}.");
+                }
+                else
+                {
+                    // Unsupported languages receive complete English fallback strings while still
+                    // following the game's active locale selection automatically.
+                    manager.AddSource(localeId, new LocaleEN(Setting));
+                    manager.AddSource(localeId, new LocaleDirectEN(Setting));
+                }
+            }
         }
 
         public void OnDispose()
