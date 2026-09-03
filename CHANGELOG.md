@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.5.0
+
+### Added
+
+- Direct population-trend compensation mode.
+- Direct mode measures the previous complete simulation day's established-resident change and schedules normal vanilla resident households when the city falls below the configured target.
+- Configurable direct correction strength from 10% to 100% of the measured shortfall.
+- Configurable direct-injection safety cap up to 250,000 estimated residents per simulation day.
+- Direct-mode statistics for requested correction, estimated residents scheduled, and households scheduled.
+- Incoming age shaping can now apply to residents created by direct trend compensation even when manual immigration control is disabled.
+
+### Changed
+
+- Adaptive trend control remains available as the less invasive mode.
+- In direct mode, immigration and birth-rate controls act as optional assist channels while household injection provides the strict shortfall correction.
+- When actual growth exceeds the selected target, direct mode throttles assist channels. Forced household outflow remains separately opt-in.
+- Direct household injection uses normal household prefabs, outside connections, `PrefabRef`, `CurrentBuilding`, and the game's household initialization pipeline instead of creating citizen entities manually.
+
+### Fixed
+
+- Added the missing `Game.Common` namespace imports required for `TimeData` in birth-rate and immigration controllers.
+
+### Safety notes
+
+- Direct compensation can create substantial housing, traffic, employment, education, and service demand. Use a save backup when testing large corrections.
+- Scheduled resident counts are estimates based on household prefab composition. The final established population is still completed by the normal household initialization and moving-in simulation.
+
 ## 0.4.0
 
 ### Added
