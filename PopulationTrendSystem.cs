@@ -4,7 +4,6 @@ using Game;
 using Game.Agents;
 using Game.Citizens;
 using Game.Common;
-using Game.Objects;
 using Game.Prefabs;
 using Game.Simulation;
 using Game.Tools;
@@ -14,16 +13,19 @@ using Unity.Entities;
 namespace CimRejuvenator
 {
     /// <summary>
-    /// Controls the established resident population trend.
-    /// Adaptive mode steers immigration and birth rates. Direct mode additionally injects
-    /// normal vanilla household entities when the previous complete simulation day missed
-    /// the selected target, so losses can be compensated without waiting for demand to react.
+    /// Controls established resident population movement.
+    /// Adaptive mode steers vanilla immigration and birth rates once per simulation day.
+    /// Direct mode acts as a continuous growth lock: it maintains a non-decreasing population
+    /// floor and schedules normal vanilla households whenever the observed population falls
+    /// behind the selected growth trajectory.
     /// </summary>
     public partial class PopulationTrendSystem : GameSystemBase
     {
         public const int FramesPerDay = 262144;
         public const int ChecksPerDay = 64;
-        private const int MaxDirectHouseholdsPerCorrection = 50000;
+        private const int MaxDirectHouseholdsPerCorrection = 100000;
+        private const int PendingCreditPercent = 50;
+        private const int PendingRetryPercentPerDay = 50;
 
         public static int ActualChangeLastDay { get; private set; }
         public static double SmoothedChangePerDay { get; private set; }
@@ -36,6 +38,9 @@ namespace CimRejuvenator
         public static int DirectResidentsInjectedSession { get; private set; }
         public static int DirectHouseholdsInjectedToday { get; private set; }
         public static int DirectHouseholdsInjectedSession { get; private set; }
+        public static int DirectPendingResidents { get; private set; }
+        public static int GrowthFloorPopulation { get; private set; }
+        public static int ShortfallLastCheck { get; private set; }
         public static string Status { get; private set; } = "Disabled";
 
         private static int s_ResetRequested;
@@ -49,6 +54,11 @@ namespace CimRejuvenator
 
         private int m_LastDay = int.MinValue;
         private int m_LastPopulation;
+        private int m_LastGuardPopulation;
+        private int m_HighWaterPopulation;
+        private int m_DayStartPopulation;
+        private int m_ChecksInDay;
+        private int m_PendingDirectResidents;
         private bool m_HasTrendSample;
         private bool m_WasEnabled;
 
@@ -68,6 +78,9 @@ namespace CimRejuvenator
             DirectResidentsInjectedSession = 0;
             DirectHouseholdsInjectedToday = 0;
             DirectHouseholdsInjectedSession = 0;
+            DirectPendingResidents = 0;
+            GrowthFloorPopulation = 0;
+            ShortfallLastCheck = 0;
         }
 
         public static bool ShouldControlImmigration(CimRejuvenatorSetting setting)
@@ -131,12 +144,12 @@ namespace CimRejuvenator
                 return PopulationManagementSystem.Clamp(
                     EffectiveBirthRatePercent,
                     0,
-                    PopulationManagementSystem.Clamp(setting.TrendMaximumBirthRatePercent, 100, 500));
+                    PopulationManagementSystem.Clamp(setting.TrendMaximumBirthRatePercent, 100, 1000));
             }
 
             if (setting != null && setting.EnableBirthControl)
             {
-                return PopulationManagementSystem.Clamp(setting.BirthRatePercent, 0, 500);
+                return PopulationManagementSystem.Clamp(setting.BirthRatePercent, 0, 1000);
             }
 
             return 100;
@@ -167,13 +180,11 @@ namespace CimRejuvenator
                 },
             });
 
-            // Matches the vanilla HouseholdSpawnSystem prefab source: normal household prefabs only.
             m_HouseholdPrefabQuery = GetEntityQuery(
                 ComponentType.ReadOnly<ArchetypeData>(),
                 ComponentType.ReadOnly<HouseholdData>(),
                 ComponentType.Exclude<DynamicHousehold>());
 
-            // Matches the vanilla resident household spawn connection filter.
             m_OutsideConnectionQuery = GetEntityQuery(
                 ComponentType.ReadOnly<Game.Objects.OutsideConnection>(),
                 ComponentType.Exclude<Game.Objects.ElectricityOutsideConnection>(),
@@ -227,14 +238,121 @@ namespace CimRejuvenator
             if (m_LastDay == int.MinValue || day < m_LastDay)
             {
                 InitializeBaseline(setting, day, population);
+                if (setting.DirectTrendMode && setting.TargetNetPopulationChangePerDay >= 0)
+                {
+                    RunDirectGrowthLock(setting, population, day);
+                }
                 return;
             }
 
-            if (day == m_LastDay)
+            ConsumePendingFromObservedGrowth(population);
+            if (population > m_HighWaterPopulation)
             {
-                return;
+                m_HighWaterPopulation = population;
             }
 
+            var dayChanged = day != m_LastDay;
+            if (dayChanged)
+            {
+                UpdateDailyTrend(population, day);
+                BeginNewDirectDay(population);
+            }
+
+            if (setting.DirectTrendMode)
+            {
+                if (setting.TargetNetPopulationChangePerDay >= 0)
+                {
+                    RunDirectGrowthLock(setting, population, day);
+                }
+                else if (dayChanged)
+                {
+                    AdjustDirectNegativeTarget(setting, day);
+                }
+            }
+            else if (dayChanged)
+            {
+                AdjustAdaptiveController(setting, population, day);
+            }
+        }
+
+        private void InitializeBaseline(CimRejuvenatorSetting setting, int day, int population)
+        {
+            m_LastDay = day;
+            m_LastPopulation = population;
+            m_LastGuardPopulation = population;
+            m_HighWaterPopulation = population;
+            m_DayStartPopulation = population;
+            m_ChecksInDay = 0;
+            m_PendingDirectResidents = 0;
+            m_HasTrendSample = false;
+
+            ActualChangeLastDay = 0;
+            SmoothedChangePerDay = 0;
+            ForcedOutflowToday = 0;
+            DirectCorrectionRequestedLastDay = 0;
+            DirectResidentsInjectedToday = 0;
+            DirectHouseholdsInjectedToday = 0;
+            DirectPendingResidents = 0;
+            GrowthFloorPopulation = population;
+            ShortfallLastCheck = 0;
+
+            EffectiveImmigrationIntensity = setting.EnableImmigrationControl
+                ? PopulationManagementSystem.Clamp(setting.ImmigrationIntensity, 0, 100)
+                : 100;
+
+            EffectiveBirthRatePercent = setting.EnableBirthControl
+                ? PopulationManagementSystem.Clamp(setting.BirthRatePercent, 0, 1000)
+                : 100;
+
+            Status = setting.DirectTrendMode
+                ? "Direct growth lock: baseline established"
+                : "Learning baseline";
+        }
+
+        private void ResetRuntime(CimRejuvenatorSetting setting)
+        {
+            m_LastDay = int.MinValue;
+            m_LastPopulation = 0;
+            m_LastGuardPopulation = 0;
+            m_HighWaterPopulation = 0;
+            m_DayStartPopulation = 0;
+            m_ChecksInDay = 0;
+            m_PendingDirectResidents = 0;
+            m_HasTrendSample = false;
+
+            ActualChangeLastDay = 0;
+            SmoothedChangePerDay = 0;
+            ForcedOutflowToday = 0;
+            DirectCorrectionRequestedLastDay = 0;
+            DirectResidentsInjectedToday = 0;
+            DirectHouseholdsInjectedToday = 0;
+            DirectPendingResidents = 0;
+            GrowthFloorPopulation = 0;
+            ShortfallLastCheck = 0;
+
+            EffectiveImmigrationIntensity = setting != null && setting.EnableImmigrationControl
+                ? PopulationManagementSystem.Clamp(setting.ImmigrationIntensity, 0, 100)
+                : 100;
+
+            EffectiveBirthRatePercent = setting != null && setting.EnableBirthControl
+                ? PopulationManagementSystem.Clamp(setting.BirthRatePercent, 0, 1000)
+                : 100;
+        }
+
+        private void ConsumePendingFromObservedGrowth(int population)
+        {
+            if (m_LastGuardPopulation > 0 && population > m_LastGuardPopulation && m_PendingDirectResidents > 0)
+            {
+                var observedIncrease = population - m_LastGuardPopulation;
+                m_PendingDirectResidents = Math.Max(0, m_PendingDirectResidents - observedIncrease);
+            }
+
+            m_LastGuardPopulation = population;
+            DirectPendingResidents = m_PendingDirectResidents;
+        }
+
+        private void UpdateDailyTrend(int population, int day)
+        {
             var elapsedDays = Math.Max(1, day - m_LastDay);
             var delta = population - m_LastPopulation;
             ActualChangeLastDay = (int)Math.Round(delta / (double)elapsedDays);
@@ -252,175 +370,163 @@ namespace CimRejuvenator
                     ActualChangeLastDay * smoothing;
             }
 
-            ForcedOutflowToday = 0;
-            DirectResidentsInjectedToday = 0;
-            DirectHouseholdsInjectedToday = 0;
-            DirectCorrectionRequestedLastDay = 0;
-
-            if (setting.DirectTrendMode)
-            {
-                AdjustDirectController(setting, population, day);
-            }
-            else
-            {
-                AdjustAdaptiveController(setting, population, day);
-            }
-
             m_LastDay = day;
             m_LastPopulation = population;
         }
 
-        private void InitializeBaseline(CimRejuvenatorSetting setting, int day, int population)
+        private void BeginNewDirectDay(int population)
         {
-            m_LastDay = day;
-            m_LastPopulation = population;
-            m_HasTrendSample = false;
-            ActualChangeLastDay = 0;
-            SmoothedChangePerDay = 0;
             ForcedOutflowToday = 0;
             DirectCorrectionRequestedLastDay = 0;
             DirectResidentsInjectedToday = 0;
             DirectHouseholdsInjectedToday = 0;
+            ShortfallLastCheck = 0;
+            m_ChecksInDay = 0;
 
-            EffectiveImmigrationIntensity = setting.EnableImmigrationControl
-                ? PopulationManagementSystem.Clamp(setting.ImmigrationIntensity, 0, 100)
-                : 100;
+            // Direct households can take time to become established residents. Only half of the
+            // outstanding estimate is trusted across a day boundary; the other half is retried.
+            m_PendingDirectResidents =
+                m_PendingDirectResidents * PendingRetryPercentPerDay / 100;
+            DirectPendingResidents = m_PendingDirectResidents;
 
-            EffectiveBirthRatePercent = setting.EnableBirthControl
-                ? PopulationManagementSystem.Clamp(setting.BirthRatePercent, 0, 500)
-                : 100;
-
-            Status = setting.DirectTrendMode
-                ? "Direct mode: learning baseline"
-                : "Learning baseline";
+            m_HighWaterPopulation = Math.Max(m_HighWaterPopulation, population);
+            m_DayStartPopulation = m_HighWaterPopulation;
         }
 
-        private void ResetRuntime(CimRejuvenatorSetting setting)
+        private void RunDirectGrowthLock(CimRejuvenatorSetting setting, int population, int day)
         {
-            m_LastDay = int.MinValue;
-            m_LastPopulation = 0;
-            m_HasTrendSample = false;
-            ActualChangeLastDay = 0;
-            SmoothedChangePerDay = 0;
-            ForcedOutflowToday = 0;
-            DirectCorrectionRequestedLastDay = 0;
-            DirectResidentsInjectedToday = 0;
-            DirectHouseholdsInjectedToday = 0;
+            m_ChecksInDay = Math.Min(ChecksPerDay, m_ChecksInDay + 1);
 
-            EffectiveImmigrationIntensity = setting != null && setting.EnableImmigrationControl
-                ? PopulationManagementSystem.Clamp(setting.ImmigrationIntensity, 0, 100)
-                : 100;
-
-            EffectiveBirthRatePercent = setting != null && setting.EnableBirthControl
-                ? PopulationManagementSystem.Clamp(setting.BirthRatePercent, 0, 500)
-                : 100;
-        }
-
-        private void AdjustDirectController(CimRejuvenatorSetting setting, int population, int day)
-        {
             var target = PopulationManagementSystem.Clamp(
                 setting.TargetNetPopulationChangePerDay,
-                -100000,
-                100000);
+                0,
+                500000);
             var deadband = PopulationManagementSystem.Clamp(setting.TrendDeadband, 0, 10000);
             var correctionStrength = PopulationManagementSystem.Clamp(
                 setting.DirectTrendCorrectionStrength,
                 10,
                 100) / 100.0;
-            var error = target - ActualChangeLastDay;
 
-            // Rate controls become an assist layer in direct mode. The direct household injection below
-            // is the part that compensates a real population shortfall immediately after a completed day.
+            var trajectoryGrowth = target <= 0
+                ? 0
+                : (int)Math.Ceiling(target * (m_ChecksInDay / (double)ChecksPerDay));
+
+            var trajectoryFloor = m_DayStartPopulation + trajectoryGrowth;
+            GrowthFloorPopulation = Math.Max(m_HighWaterPopulation, trajectoryFloor);
+
+            // We deliberately credit only half of scheduled-but-not-yet-established residents.
+            // This keeps the controller aggressive during a death wave instead of waiting an
+            // entire day for every incoming household to finish the vanilla move-in pipeline.
+            var pendingCredit = m_PendingDirectResidents * PendingCreditPercent / 100;
+            var effectivePopulation = population + pendingCredit;
+            var shortfall = Math.Max(0, GrowthFloorPopulation - effectivePopulation);
+            ShortfallLastCheck = shortfall;
+
             if (setting.TrendUseImmigration)
             {
-                if (error > deadband)
-                {
-                    EffectiveImmigrationIntensity = 100;
-                }
-                else if (error < -deadband)
-                {
-                    EffectiveImmigrationIntensity = 0;
-                }
+                EffectiveImmigrationIntensity = 100;
+            }
+
+            var maxBirth = PopulationManagementSystem.Clamp(setting.TrendMaximumBirthRatePercent, 100, 1000);
+            if (setting.TrendUseBirths)
+            {
+                EffectiveBirthRatePercent = shortfall > deadband ? maxBirth : 100;
+            }
+
+            if (shortfall <= deadband)
+            {
+                DirectCorrectionRequestedLastDay = 0;
+                DirectPendingResidents = m_PendingDirectResidents;
+                Status = target > 0
+                    ? $"Growth lock holding floor {GrowthFloorPopulation:N0}"
+                    : $"No-decline lock holding {GrowthFloorPopulation:N0}";
+                return;
+            }
+
+            var requested = (int)Math.Ceiling((shortfall - deadband) * correctionStrength);
+            var dailyCap = PopulationManagementSystem.Clamp(
+                setting.DirectTrendMaxInjectedResidentsPerDay,
+                100,
+                1000000);
+            var perCheckCap = PopulationManagementSystem.Clamp(
+                setting.DirectTrendMaxInjectedResidentsPerCheck,
+                100,
+                250000);
+            var remainingToday = Math.Max(0, dailyCap - DirectResidentsInjectedToday);
+
+            requested = Math.Min(requested, perCheckCap);
+            requested = Math.Min(requested, remainingToday);
+
+            if (setting.EnableImmigrationControl && setting.UsePopulationCeiling)
+            {
+                var remainingCapacity = Math.Max(0, setting.PopulationCeiling - population);
+                requested = Math.Min(requested, remainingCapacity);
+            }
+
+            DirectCorrectionRequestedLastDay = requested;
+
+            if (requested <= 0)
+            {
+                Status = remainingToday <= 0
+                    ? "Growth lock waiting: daily direct cap reached"
+                    : "Growth lock blocked by population ceiling";
+                return;
+            }
+
+            var result = InjectVanillaHouseholds(requested, day);
+            DirectResidentsInjectedToday += result.residents;
+            DirectResidentsInjectedSession += result.residents;
+            DirectHouseholdsInjectedToday += result.households;
+            DirectHouseholdsInjectedSession += result.households;
+            m_PendingDirectResidents += result.residents;
+            DirectPendingResidents = m_PendingDirectResidents;
+
+            if (result.residents > 0)
+            {
+                Status = $"Growth lock correcting {shortfall:N0}: scheduled ~{result.residents:N0}";
+                Mod.Log.Info(
+                    $"Direct growth lock: population={population:N0}, floor={GrowthFloorPopulation:N0}, " +
+                    $"shortfall={shortfall:N0}, requested={requested:N0}, " +
+                    $"scheduledResidents={result.residents:N0}, pending={m_PendingDirectResidents:N0}.");
+            }
+            else
+            {
+                Status = "Growth lock could not find a valid household prefab or outside connection";
+            }
+        }
+
+        private void AdjustDirectNegativeTarget(CimRejuvenatorSetting setting, int day)
+        {
+            var target = PopulationManagementSystem.Clamp(
+                setting.TargetNetPopulationChangePerDay,
+                -500000,
+                -1);
+            var deadband = PopulationManagementSystem.Clamp(setting.TrendDeadband, 0, 10000);
+            var response = PopulationManagementSystem.Clamp(setting.DirectTrendCorrectionStrength, 10, 100) / 100.0;
+
+            if (setting.TrendUseImmigration)
+            {
+                EffectiveImmigrationIntensity = 0;
             }
 
             if (setting.TrendUseBirths)
             {
-                var maxBirth = PopulationManagementSystem.Clamp(setting.TrendMaximumBirthRatePercent, 100, 500);
-                if (error > deadband)
-                {
-                    EffectiveBirthRatePercent = maxBirth;
-                }
-                else if (error < -deadband)
-                {
-                    EffectiveBirthRatePercent = 0;
-                }
+                EffectiveBirthRatePercent = 0;
             }
 
-            if (Math.Abs(error) <= deadband)
+            var error = ActualChangeLastDay - target;
+            if (setting.TrendAllowForcedOutflow && error > deadband)
             {
-                Status = "Direct mode: target met";
-                return;
-            }
-
-            if (error > deadband)
-            {
-                var requested = (int)Math.Ceiling((error - deadband) * correctionStrength);
-                var cap = PopulationManagementSystem.Clamp(
-                    setting.DirectTrendMaxInjectedResidentsPerDay,
-                    100,
-                    250000);
-                requested = Math.Min(requested, cap);
-
-                if (setting.EnableImmigrationControl && setting.UsePopulationCeiling)
-                {
-                    var remainingCapacity = Math.Max(0, setting.PopulationCeiling - population);
-                    requested = Math.Min(requested, remainingCapacity);
-                }
-
-                DirectCorrectionRequestedLastDay = requested;
-
-                if (requested <= 0)
-                {
-                    Status = "Direct mode: correction blocked by population ceiling";
-                    return;
-                }
-
-                var result = InjectVanillaHouseholds(requested, day);
-                DirectResidentsInjectedToday = result.residents;
-                DirectResidentsInjectedSession += result.residents;
-                DirectHouseholdsInjectedToday = result.households;
-                DirectHouseholdsInjectedSession += result.households;
-
-                if (result.residents > 0)
-                {
-                    Status = $"Direct mode: injected ~{result.residents:N0} residents in {result.households:N0} households";
-                    Mod.Log.Info(
-                        $"Direct trend correction: actual={ActualChangeLastDay:+0;-0;0}/day, " +
-                        $"target={target:+0;-0;0}/day, requested={requested:N0}, " +
-                        $"scheduledResidents={result.residents:N0}, households={result.households:N0}.");
-                }
-                else
-                {
-                    Status = "Direct mode: no valid household prefab or outside connection";
-                }
-
-                return;
-            }
-
-            // The city grew faster than requested. Direct removal remains opt-in because it changes
-            // household state. Without it, the controller only closes the inflow/birth-rate assist.
-            if (setting.TrendAllowForcedOutflow)
-            {
-                var requested = (int)Math.Ceiling((-error - deadband) * correctionStrength);
-                var cap = PopulationManagementSystem.Clamp(setting.TrendMaxForcedOutflowPerDay, 100, 100000);
+                var requested = (int)Math.Ceiling((error - deadband) * response);
+                var cap = PopulationManagementSystem.Clamp(setting.TrendMaxForcedOutflowPerDay, 100, 250000);
                 requested = Math.Min(requested, cap);
                 ForcedOutflowToday = ForceHouseholdsOut(requested, day);
                 ForcedOutflowSession += ForcedOutflowToday;
-                Status = $"Direct mode: forced outflow ~{ForcedOutflowToday:N0} residents";
+                Status = $"Direct negative target: forced outflow ~{ForcedOutflowToday:N0}";
             }
             else
             {
-                Status = "Direct mode: above target; inflow throttled";
+                Status = "Direct negative target: inflow suppressed";
             }
         }
 
@@ -428,8 +534,8 @@ namespace CimRejuvenator
         {
             var target = PopulationManagementSystem.Clamp(
                 setting.TargetNetPopulationChangePerDay,
-                -100000,
-                100000);
+                -500000,
+                500000);
             var deadband = PopulationManagementSystem.Clamp(setting.TrendDeadband, 0, 10000);
             var response = PopulationManagementSystem.Clamp(setting.TrendResponseStrength, 10, 100) / 100.0;
             var error = target - SmoothedChangePerDay;
@@ -450,7 +556,7 @@ namespace CimRejuvenator
                 {
                     var gap = SmoothedChangePerDay - target - deadband;
                     var requested = (int)Math.Ceiling(gap * response);
-                    var cap = PopulationManagementSystem.Clamp(setting.TrendMaxForcedOutflowPerDay, 100, 100000);
+                    var cap = PopulationManagementSystem.Clamp(setting.TrendMaxForcedOutflowPerDay, 100, 250000);
                     requested = Math.Min(requested, cap);
 
                     if (requested > 0)
@@ -486,8 +592,8 @@ namespace CimRejuvenator
 
             if (setting.TrendUseBirths)
             {
-                var maxBirth = PopulationManagementSystem.Clamp(setting.TrendMaximumBirthRatePercent, 100, 500);
-                var step = SignedStep(normalizedError * 100.0 * response);
+                var maxBirth = PopulationManagementSystem.Clamp(setting.TrendMaximumBirthRatePercent, 100, 1000);
+                var step = SignedStep(normalizedError * 150.0 * response);
                 EffectiveBirthRatePercent = PopulationManagementSystem.Clamp(
                     EffectiveBirthRatePercent + step,
                     0,
