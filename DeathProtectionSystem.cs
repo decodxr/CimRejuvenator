@@ -8,132 +8,32 @@ using Unity.Entities;
 
 namespace CimRejuvenator
 {
-    /// <summary>
-    /// Prevents established residents from being lost to death while Cim Rejuvenator is enabled.
-    /// The vanilla DeathCheckSystem is suspended so normal old-age and sickness/injury death rolls
-    /// never complete. Additional passes clear Dead flags created by event and health-problem paths
-    /// before resident removal can consume the corpse. Households may still leave the city normally.
-    /// </summary>
-    public partial class DeathProtectionSystem : GameSystemBase
+    internal static class DeathProtectionCore
     {
-        public static int PreventedLastPass { get; private set; }
-        public static int PreventedSession { get; private set; }
-        public static string Status { get; private set; } = "Disabled";
+        internal static int PreventedLastPass { get; private set; }
+        internal static int PreventedSession { get; private set; }
+        internal static string Status { get; private set; } = "Disabled";
 
-        private DeathCheckSystem m_DeathCheckSystem;
-        private EntityQuery m_DeadResidentQuery;
-        private bool m_HasDeathCheckControl;
-        private bool m_PreviousDeathCheckEnabled = true;
-
-        protected override void OnCreate()
+        internal static EntityQuery CreateQuery(GameSystemBase system)
         {
-            base.OnCreate();
-
-            m_DeathCheckSystem = World.GetOrCreateSystemManaged<DeathCheckSystem>();
-            m_DeadResidentQuery = GetEntityQuery(new EntityQueryDesc
-            {
-                All = new[]
-                {
-                    ComponentType.ReadWrite<Citizen>(),
-                    ComponentType.ReadWrite<HealthProblem>(),
-                    ComponentType.ReadOnly<HouseholdMember>(),
-                },
-                None = new[]
-                {
-                    ComponentType.ReadOnly<Deleted>(),
-                    ComponentType.ReadOnly<Temp>(),
-                },
-            });
-
-            Mod.Log.Info("DeathProtectionSystem initialized.");
+            // Kept here only as documentation. GetEntityQuery is protected, so each guard creates
+            // the same query in its own OnCreate method.
+            return default;
         }
 
-        public override int GetUpdateInterval(SystemUpdatePhase phase)
+        internal static int RescueDeadResidents(EntityManager entityManager, EntityQuery query, string guardName)
         {
-            // This system is intentionally cheap: its query only contains citizens that already
-            // have HealthProblem. Running every scheduled pass minimizes the window in which a
-            // death flag can survive long enough to reach corpse removal.
-            return 1;
-        }
-
-        protected override void OnUpdate()
-        {
-            var setting = Mod.Setting;
-            var enabled = setting != null && setting.EnableMod;
-
-            if (!enabled)
+            if (query.IsEmptyIgnoreFilter)
             {
-                ReleaseDeathCheckControl();
                 PreventedLastPass = 0;
-                Status = "Disabled";
-                return;
-            }
-
-            TakeDeathCheckControl();
-            PreventedLastPass = RescueDeadResidents();
-
-            if (PreventedLastPass > 0)
-            {
-                PreventedSession += PreventedLastPass;
-                Status = $"Death lock active: rescued {PreventedLastPass:N0} resident(s) this pass";
-                Mod.Log.Info(
-                    $"Death lock cleared Dead state from {PreventedLastPass:N0} established resident(s). " +
-                    $"Session total={PreventedSession:N0}.");
-            }
-            else
-            {
                 Status = "Death lock active";
-            }
-        }
-
-        protected override void OnDestroy()
-        {
-            ReleaseDeathCheckControl();
-            base.OnDestroy();
-        }
-
-        private void TakeDeathCheckControl()
-        {
-            if (!m_HasDeathCheckControl)
-            {
-                m_PreviousDeathCheckEnabled = m_DeathCheckSystem.Enabled;
-                m_HasDeathCheckControl = true;
-                Mod.Log.Info(
-                    $"Death lock took control of vanilla DeathCheckSystem. Previous enabled state={m_PreviousDeathCheckEnabled}.");
-            }
-
-            // DeathCheckSystem is where normal old-age and sickness/injury deaths are committed.
-            // Keep it disabled for as long as the master mod switch is enabled.
-            if (m_DeathCheckSystem.Enabled)
-            {
-                m_DeathCheckSystem.Enabled = false;
-            }
-        }
-
-        private void ReleaseDeathCheckControl()
-        {
-            if (!m_HasDeathCheckControl || m_DeathCheckSystem == null)
-            {
-                return;
-            }
-
-            m_DeathCheckSystem.Enabled = m_PreviousDeathCheckEnabled;
-            m_HasDeathCheckControl = false;
-            Mod.Log.Info(
-                $"Death lock released vanilla DeathCheckSystem. Restored enabled state={m_PreviousDeathCheckEnabled}.");
-        }
-
-        private int RescueDeadResidents()
-        {
-            if (m_DeadResidentQuery.IsEmptyIgnoreFilter)
-            {
                 return 0;
             }
 
-            var entities = m_DeadResidentQuery.ToEntityArray(Allocator.Temp);
-            var citizens = m_DeadResidentQuery.ToComponentDataArray<Citizen>(Allocator.Temp);
-            var problems = m_DeadResidentQuery.ToComponentDataArray<HealthProblem>(Allocator.Temp);
-            var members = m_DeadResidentQuery.ToComponentDataArray<HouseholdMember>(Allocator.Temp);
+            var entities = query.ToEntityArray(Allocator.Temp);
+            var citizens = query.ToComponentDataArray<Citizen>(Allocator.Temp);
+            var problems = query.ToComponentDataArray<HealthProblem>(Allocator.Temp);
+            var members = query.ToComponentDataArray<HouseholdMember>(Allocator.Temp);
 
             var rescued = 0;
 
@@ -149,14 +49,14 @@ namespace CimRejuvenator
                 var citizen = citizens[i];
                 var householdEntity = members[i].m_Household;
 
-                if (!IsProtectedResident(entity, citizen, householdEntity))
+                if (!IsProtectedResident(entityManager, citizen, householdEntity))
                 {
                     continue;
                 }
 
-                // A protected resident is revived in-place. Preserve the citizen entity and
-                // household links, but clear all states that would immediately route it back into
-                // deathcare or another fatal health cycle.
+                // Revive in place. The citizen entity, household membership, identity, education,
+                // and other components are preserved. Fatal/transport states are cleared and the
+                // resident is healed so the same health problem cannot immediately kill it again.
                 problem.m_Flags &= ~(
                     HealthProblemFlags.Dead |
                     HealthProblemFlags.RequireTransport |
@@ -166,11 +66,10 @@ namespace CimRejuvenator
                     HealthProblemFlags.Injured);
                 problem.m_Timer = 0;
                 problem.m_Event = Entity.Null;
-
                 citizen.m_Health = 100;
 
-                EntityManager.SetComponentData(entity, problem);
-                EntityManager.SetComponentData(entity, citizen);
+                entityManager.SetComponentData(entity, problem);
+                entityManager.SetComponentData(entity, citizen);
                 rescued++;
             }
 
@@ -179,10 +78,30 @@ namespace CimRejuvenator
             citizens.Dispose();
             entities.Dispose();
 
+            PreventedLastPass = rescued;
+            if (rescued > 0)
+            {
+                PreventedSession += rescued;
+                Status = $"Death lock active: rescued {rescued:N0} resident(s)";
+                Mod.Log.Info(
+                    $"{guardName}: cleared Dead state from {rescued:N0} established resident(s); " +
+                    $"session prevented={PreventedSession:N0}.");
+            }
+            else
+            {
+                Status = "Death lock active";
+            }
+
             return rescued;
         }
 
-        private bool IsProtectedResident(Entity citizenEntity, Citizen citizen, Entity householdEntity)
+        internal static void SetDisabled()
+        {
+            PreventedLastPass = 0;
+            Status = "Disabled";
+        }
+
+        private static bool IsProtectedResident(EntityManager entityManager, Citizen citizen, Entity householdEntity)
         {
             if ((citizen.m_State & (CitizenFlags.Tourist | CitizenFlags.Commuter)) != 0)
             {
@@ -190,20 +109,250 @@ namespace CimRejuvenator
             }
 
             if (householdEntity == Entity.Null ||
-                !EntityManager.Exists(householdEntity) ||
-                !EntityManager.HasComponent<Household>(householdEntity))
+                !entityManager.Exists(householdEntity) ||
+                !entityManager.HasComponent<Household>(householdEntity))
             {
                 return false;
             }
 
-            if (EntityManager.HasComponent<TouristHousehold>(householdEntity) ||
-                EntityManager.HasComponent<CommuterHousehold>(householdEntity))
+            if (entityManager.HasComponent<TouristHousehold>(householdEntity) ||
+                entityManager.HasComponent<CommuterHousehold>(householdEntity))
             {
                 return false;
             }
 
-            var household = EntityManager.GetComponentData<Household>(householdEntity);
+            var household = entityManager.GetComponentData<Household>(householdEntity);
             return (household.m_Flags & HouseholdFlags.MovedIn) != 0;
+        }
+    }
+
+    /// <summary>
+    /// Main death lock. It disables the vanilla DeathCheckSystem, preventing the normal old-age
+    /// and sickness/injury death rolls from committing. A late simulation rescue also catches
+    /// deaths produced by HealthProblemSystem.
+    /// </summary>
+    public partial class DeathProtectionSystem : GameSystemBase
+    {
+        public static int PreventedLastPass => DeathProtectionCore.PreventedLastPass;
+        public static int PreventedSession => DeathProtectionCore.PreventedSession;
+        public static string Status => DeathProtectionCore.Status;
+
+        private DeathCheckSystem m_DeathCheckSystem;
+        private EntityQuery m_DeadResidentQuery;
+        private bool m_HasDeathCheckControl;
+        private bool m_PreviousDeathCheckEnabled = true;
+
+        protected override void OnCreate()
+        {
+            base.OnCreate();
+
+            m_DeathCheckSystem = World.GetOrCreateSystemManaged<DeathCheckSystem>();
+            m_DeadResidentQuery = CreateDeadResidentQuery();
+
+            // The setting object exists before systems are registered in Mod.OnLoad. Taking
+            // control here prevents DeathCheckSystem from getting one extra fatal pass on startup.
+            if (Mod.Setting != null && Mod.Setting.EnableMod)
+            {
+                TakeDeathCheckControl();
+            }
+
+            Mod.Log.Info("DeathProtectionSystem initialized.");
+        }
+
+        public override int GetUpdateInterval(SystemUpdatePhase phase) => 1;
+
+        protected override void OnUpdate()
+        {
+            var enabled = Mod.Setting != null && Mod.Setting.EnableMod;
+            if (!enabled)
+            {
+                ReleaseDeathCheckControl();
+                DeathProtectionCore.SetDisabled();
+                return;
+            }
+
+            TakeDeathCheckControl();
+            DeathProtectionCore.RescueDeadResidents(EntityManager, m_DeadResidentQuery, "health death guard");
+        }
+
+        protected override void OnDestroy()
+        {
+            ReleaseDeathCheckControl();
+            base.OnDestroy();
+        }
+
+        private EntityQuery CreateDeadResidentQuery()
+        {
+            return GetEntityQuery(new EntityQueryDesc
+            {
+                All = new[]
+                {
+                    ComponentType.ReadWrite<Citizen>(),
+                    ComponentType.ReadWrite<HealthProblem>(),
+                    ComponentType.ReadOnly<HouseholdMember>(),
+                },
+                None = new[]
+                {
+                    ComponentType.ReadOnly<Deleted>(),
+                    ComponentType.ReadOnly<Temp>(),
+                },
+            });
+        }
+
+        private void TakeDeathCheckControl()
+        {
+            if (!m_HasDeathCheckControl)
+            {
+                m_PreviousDeathCheckEnabled = m_DeathCheckSystem.Enabled;
+                m_HasDeathCheckControl = true;
+                Mod.Log.Info(
+                    $"Death lock took control of vanilla DeathCheckSystem; previous enabled state={m_PreviousDeathCheckEnabled}.");
+            }
+
+            m_DeathCheckSystem.Enabled = false;
+        }
+
+        private void ReleaseDeathCheckControl()
+        {
+            if (!m_HasDeathCheckControl || m_DeathCheckSystem == null)
+            {
+                return;
+            }
+
+            m_DeathCheckSystem.Enabled = m_PreviousDeathCheckEnabled;
+            m_HasDeathCheckControl = false;
+            Mod.Log.Info(
+                $"Death lock released vanilla DeathCheckSystem; restored enabled state={m_PreviousDeathCheckEnabled}.");
+        }
+    }
+
+    /// <summary>
+    /// Runs immediately after SicknessCheckSystem so a fatal sickness/health event cannot reach
+    /// later health processing with the resident still marked dead.
+    /// </summary>
+    public partial class DeathSicknessGuardSystem : GameSystemBase
+    {
+        private EntityQuery m_Query;
+
+        protected override void OnCreate()
+        {
+            base.OnCreate();
+            m_Query = CreateQuery();
+        }
+
+        public override int GetUpdateInterval(SystemUpdatePhase phase) => 1;
+
+        protected override void OnUpdate()
+        {
+            if (Mod.Setting != null && Mod.Setting.EnableMod)
+            {
+                DeathProtectionCore.RescueDeadResidents(EntityManager, m_Query, "sickness death guard");
+            }
+        }
+
+        private EntityQuery CreateQuery()
+        {
+            return GetEntityQuery(new EntityQueryDesc
+            {
+                All = new[]
+                {
+                    ComponentType.ReadWrite<Citizen>(),
+                    ComponentType.ReadWrite<HealthProblem>(),
+                    ComponentType.ReadOnly<HouseholdMember>(),
+                },
+                None = new[]
+                {
+                    ComponentType.ReadOnly<Deleted>(),
+                    ComponentType.ReadOnly<Temp>(),
+                },
+            });
+        }
+    }
+
+    /// <summary>
+    /// Catches disaster/event deaths after AddHealthProblemSystem has materialized the health
+    /// problem, before the next removal phase can consume the resident as a corpse.
+    /// </summary>
+    public partial class DeathEventGuardSystem : GameSystemBase
+    {
+        private EntityQuery m_Query;
+
+        protected override void OnCreate()
+        {
+            base.OnCreate();
+            m_Query = CreateQuery();
+        }
+
+        public override int GetUpdateInterval(SystemUpdatePhase phase) => 1;
+
+        protected override void OnUpdate()
+        {
+            if (Mod.Setting != null && Mod.Setting.EnableMod)
+            {
+                DeathProtectionCore.RescueDeadResidents(EntityManager, m_Query, "event death guard");
+            }
+        }
+
+        private EntityQuery CreateQuery()
+        {
+            return GetEntityQuery(new EntityQueryDesc
+            {
+                All = new[]
+                {
+                    ComponentType.ReadWrite<Citizen>(),
+                    ComponentType.ReadWrite<HealthProblem>(),
+                    ComponentType.ReadOnly<HouseholdMember>(),
+                },
+                None = new[]
+                {
+                    ComponentType.ReadOnly<Deleted>(),
+                    ComponentType.ReadOnly<Temp>(),
+                },
+            });
+        }
+    }
+
+    /// <summary>
+    /// Final safety net before HouseholdAndCitizenRemoveSystem. This is deliberately separate
+    /// from the simulation guards so an already-dead resident loaded from a save is revived before
+    /// vanilla removal has a chance to delete it.
+    /// </summary>
+    public partial class DeathRemovalGuardSystem : GameSystemBase
+    {
+        private EntityQuery m_Query;
+
+        protected override void OnCreate()
+        {
+            base.OnCreate();
+            m_Query = CreateQuery();
+        }
+
+        public override int GetUpdateInterval(SystemUpdatePhase phase) => 1;
+
+        protected override void OnUpdate()
+        {
+            if (Mod.Setting != null && Mod.Setting.EnableMod)
+            {
+                DeathProtectionCore.RescueDeadResidents(EntityManager, m_Query, "pre-removal death guard");
+            }
+        }
+
+        private EntityQuery CreateQuery()
+        {
+            return GetEntityQuery(new EntityQueryDesc
+            {
+                All = new[]
+                {
+                    ComponentType.ReadWrite<Citizen>(),
+                    ComponentType.ReadWrite<HealthProblem>(),
+                    ComponentType.ReadOnly<HouseholdMember>(),
+                },
+                None = new[]
+                {
+                    ComponentType.ReadOnly<Deleted>(),
+                    ComponentType.ReadOnly<Temp>(),
+                },
+            });
         }
     }
 }
