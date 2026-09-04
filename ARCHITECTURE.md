@@ -1,6 +1,38 @@
 # Architecture
 
-Cim Rejuvenator is split into five simulation systems so population conversion, flow tracking, trend control, birth-rate control, and immigration gating remain separated.
+Cim Rejuvenator separates demographic management, population flow, trend control, birth control, immigration gating, and resident death protection into independent ECS systems.
+
+## Death protection
+
+Version 0.7.0 adds a hard death lock for established residents while the master mod switch is enabled.
+
+### DeathProtectionSystem
+
+`DeathProtectionSystem` is scheduled immediately before vanilla `DeathCheckSystem` in `GameSimulation`. It captures the previous `DeathCheckSystem.Enabled` state and forces the vanilla system off while Cim Rejuvenator is active. This prevents the standard old-age and sickness/injury death path from committing deaths.
+
+When control is released, the previous enabled state is restored rather than assuming vanilla should always be enabled.
+
+### DeathSicknessGuardSystem
+
+Runs after `SicknessCheckSystem` in `GameSimulation` and clears any fatal resident health state that is already materialized at that point.
+
+### DeathHealthGuardSystem
+
+Runs after `HealthProblemSystem` in `GameSimulation`. It catches fatal states created by late health, danger, trapped, or related processing.
+
+### DeathEventGuardSystem
+
+Runs after `Game.Events.AddHealthProblemSystem` in `Modification4` to catch disaster and event death states.
+
+### DeathRemovalGuardSystem
+
+Runs immediately before `HouseholdAndCitizenRemoveSystem` in `Modification2`. It is the final safety net and also allows dead residents already present in a loaded save to be revived before the vanilla removal system consumes them.
+
+All guards protect established residents in moved-in households. Tourists and commuters are excluded. A protected resident keeps the same citizen entity and household membership; `Dead`, `RequireTransport`, `InDanger`, `Trapped`, `Sick`, and `Injured` are cleared, the event reference and timer are reset, and health is restored to 100.
+
+Moving-away households are not prevented from completing normal departure, so population can still decrease from genuine out-migration.
+
+Event systems can emit casualty statistics before a guard clears a fatal state. Those counters are not treated as proof that the citizen was removed; resident population and entity survival are the authoritative checks for the death lock.
 
 ## PopulationManagementSystem
 
@@ -34,31 +66,21 @@ The system supports adaptive feedback control and continuous direct growth lock.
 
 ### Adaptive mode
 
-Adaptive mode records the established-resident change across simulation-day boundaries, maintains an exponential moving average, and adjusts enabled control channels toward the selected target:
+Adaptive mode records population movement across simulation-day boundaries, maintains an exponential moving average, and adjusts enabled control channels toward the selected target:
 
 - effective immigration intensity;
 - effective birth-rate multiplier;
 - optional forced household outflow for negative targets.
 
-It keeps normal demand-driven population flow and is therefore the less invasive mode, but a large death wave can overwhelm it.
-
 ### Continuous direct growth lock
 
-For zero and positive targets, direct mode no longer waits for a complete day before correcting population loss.
+For zero and positive targets, direct mode maintains a high-water population floor and an optional upward target trajectory. It reads `Game.City.Population.m_Population`, matching the vanilla city population indicator.
 
-The system maintains:
+At each direct check, the controller compares current population plus partial credit for pending direct residents against the protected floor. If the city is short, it schedules resident households subject to correction strength, a per-check limit, and a daily limit.
 
-- a high-water established-resident count;
-- a day-start population anchor;
-- a target trajectory that advances during the day for positive targets;
-- a protected population floor equal to the greater of the high-water count and the target trajectory;
-- an estimate of directly scheduled residents that have not yet appeared in the established-resident census.
+Only part of pending direct population is trusted when calculating the next shortfall. Pending population is also partially retried at day boundaries so delayed move-in does not make the controller stop correcting too early.
 
-A target of `0/day` is therefore a no-decline lock: the protected floor cannot move downward while direct mode remains active. A positive target raises that protected floor throughout the day.
-
-At each direct check, the controller compares the current established population plus partial credit for pending direct residents against the protected floor. When the city is short, it schedules additional resident households subject to correction strength, a per-check limit, and a daily limit.
-
-Only part of pending direct population is trusted when calculating the next shortfall. Pending population is also partially retried at day boundaries. This intentionally biases emergency recovery toward over-correction rather than letting a death wave continue while the controller waits for slow move-in completion.
+With death protection enabled, direct growth lock is primarily responsible for deliberate growth and compensation for real move-outs rather than replacing normal deaths.
 
 ### Direct household injection path
 
@@ -73,7 +95,7 @@ Direct mode does not construct standalone citizen entities. It mirrors the vanil
 
 Direct resident counters are scheduled estimates until those households become established residents.
 
-For negative direct targets, inflow can be suppressed and forced household outflow remains separately opt-in. Positive and zero direct targets do not require forced removal.
+For negative direct targets, inflow can be suppressed and forced household outflow remains separately opt-in.
 
 ## BirthRateControlSystem
 
@@ -104,32 +126,21 @@ Direct growth-lock injection does not depend on positive residential demand, but
 
 ## Localization
 
-On load, the mod registers one localization source for every locale supported by the running game.
+On load, the mod registers localization for every locale supported by the running game.
 
-Portuguese locales use `LocalePTBR`. Other locales currently receive the complete English sources as fallback. Because sources are registered against the game's locale IDs, switching the active game locale selects the matching mod dictionary without maintaining a separate language setting inside Cim Rejuvenator.
+Portuguese locales use `LocalePTBR`. Other currently unsupported locales receive the complete English sources as fallback. Repository code, comments, documentation, and build scripts remain in English.
 
 ## Options and diagnostics
 
-The Options page is generated from the public properties on `CimRejuvenatorSetting`.
+The Options page is generated from the public properties on `CimRejuvenatorSetting`. `BuildVersion` exposes the version of the loaded DLL so stale deployments can be identified quickly.
 
-Important diagnostics include:
-
-- loaded DLL version;
-- established resident census;
-- daily and smoothed trend;
-- protected growth floor;
-- current direct shortfall;
-- pending direct residents;
-- scheduled direct residents and households;
-- effective immigration and birth controls.
-
-The direct Linux build writes `BUILD_INFO.txt`, verifies the deployed DLL SHA-256 checksum, and warns about duplicate local `CimRejuvenator.dll` files.
+The death lock currently follows the master `Enable Cim Rejuvenator` switch instead of using a second toggle, so there is no state where the population controller is enabled but normal resident death is accidentally left active.
 
 ## Build modes
 
 The project can use the official modding toolchain when `CSII_TOOLPATH` is available. It can also compile directly against the installed game's managed assemblies by setting `ForceNoUnityBuild=true`.
 
-Direct-assembly build scripts remove previous build products before compilation so stale binaries cannot be silently redeployed after source changes.
+Direct-assembly build scripts remove previous build products before compilation, write build metadata, verify the deployed DLL hash, and warn about duplicate local copies.
 
 ## Compatibility boundaries
 
@@ -137,8 +148,10 @@ Birth control overlaps with mods that write the same `CitizenParametersData` fie
 
 Immigration control overlaps with mods that directly enable or disable `HouseholdSpawnSystem`.
 
+Death protection overlaps with mods that replace or take runtime ownership of `DeathCheckSystem`, `SicknessCheckSystem`, `HealthProblemSystem`, `AddHealthProblemSystem`, or resident-removal behavior.
+
 Direct growth lock uses the vanilla household prefab/archetype initialization path. Mods that replace household spawning, household prefabs, outside-connection behavior, or household initialization can alter its results.
 
-Demographic balancing changes life stages on existing entities. It preserves entity and household links, but downstream simulation systems can react to the new life stage by changing employment, education, travel, and service demand.
+Demographic balancing changes life stages on existing entities. It preserves entity and household links, but downstream systems can react to the new life stage by changing employment, education, travel, and service demand.
 
 Forced population outflow adds the base game's `MovingAway` component to resident households. The base game's moving-away pipeline then handles the actual departure.
