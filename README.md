@@ -1,76 +1,43 @@
 # Cim Rejuvenator
 
-Cim Rejuvenator is a population-management code mod for **Cities: Skylines II**. It combines rejuvenation, demographic balancing, immigration control, birth-rate control, incoming age shaping, population limits, adaptive trend control, and a direct growth-lock system for cities suffering severe population collapse.
+Cim Rejuvenator is a population-management code mod for **Cities: Skylines II**. It combines a hard resident death lock, rejuvenation, demographic balancing, immigration and birth controls, incoming age shaping, population limits, adaptive trend control, and direct population recovery.
 
-> **Experimental release:** back up important saves before using large-scale life-stage conversion, direct household injection, or forced population outflow. Version 0.6.0 changes citizen life stages and population simulation parameters at runtime.
+> **Experimental:** back up important saves before testing aggressive population controls. The mod changes citizen state and simulation systems at runtime.
 
-## Highlights in 0.6.0
+## Highlights in 0.7.0
 
-- Continuous direct growth lock instead of one correction per simulation day.
-- A zero target can be used as a **no-decline lock**.
-- Positive targets create a protected upward population trajectory.
-- Direct corrections react throughout the day and compensate sudden death-wave losses.
-- Separate daily and per-check direct-injection safety limits.
-- Emergency growth preset for severe population collapse.
-- Population target range increased to **-500,000 through +500,000 residents/day**.
-- Direct daily capacity increased to **1,000,000 residents/day**.
-- Birth-rate controls increased to **1,000%**.
-- New diagnostics for protected population floor, shortfall, and pending direct residents.
-- Portuguese localization is selected automatically when the game runs in a Portuguese locale. Unsupported locales receive the complete English fallback.
+- Hard death lock for established residents.
+- Normal vanilla old-age and sickness/injury deaths are stopped by suspending `DeathCheckSystem` while the mod is enabled.
+- Additional guards rescue resident death states created by sickness, health-problem, disaster, and event paths.
+- A final pre-removal guard revives any remaining resident corpse before vanilla citizen removal.
+- Residents may still leave the city normally; moving away is not blocked.
+- Existing population trend controls remain available for deliberate growth and for replacing move-outs.
+- Portuguese UI is selected automatically for Portuguese game locales; unsupported languages receive English fallback strings.
 
-## Population trend control
+## Death lock
 
-### Adaptive mode
+Version 0.7.0 changes the population-safety model. Instead of trying to replace every person after a death, the mod prevents established residents from remaining dead long enough to be removed from the city.
 
-Adaptive mode steers the normal simulation by changing immigration intensity and birth-rate multipliers. It is less invasive, but it cannot guarantee growth if vanilla demand, housing, or a death wave overwhelms those channels.
+The protection has four layers:
 
-### Continuous direct growth lock
+1. `DeathCheckSystem` is disabled while the Cim Rejuvenator master switch is enabled. This blocks the normal old-age and sickness/injury death rolls.
+2. A guard after `SicknessCheckSystem` clears fatal health states created by sickness checks.
+3. A guard after `AddHealthProblemSystem` clears disaster and event death states.
+4. A guard after `HealthProblemSystem`, plus a final guard before `HouseholdAndCitizenRemoveSystem`, clears any remaining resident death state before removal.
 
-Direct mode is intended for population emergencies.
+When a protected resident is rescued, the same citizen entity and household membership are preserved. Fatal, transport, danger, sickness, and injury flags are cleared and health is restored to 100.
 
-For a target of `0/day`, the controller keeps a high-water population floor. If the established resident count falls below that floor, the mod schedules normal household entities from outside connections to replace the shortfall.
+The lock applies to **established residents in moved-in households**. Tourists and commuters are not protected. Households marked to move away are not prevented from leaving, so population can still fall because residents genuinely move out.
 
-For a positive target, the floor also moves upward during the simulation day. For example:
+Some event systems can emit a casualty statistic at the moment they attempt a fatal event, before the protection guard clears the death state. For that reason, the most important validation is the resident population and whether citizens are actually removed, not a same-tick event counter.
 
-```text
-Target: +5,000/day
-Current established population falls by 8,000
-Growth lock detects the shortfall
-The controller schedules enough resident households to recover the loss
-The protected floor continues moving toward +5,000/day
-```
-
-Direct mode runs multiple checks per day instead of waiting for a complete day before reacting. Scheduled households still pass through the game's normal household initialization and move-in pipeline, so the vanilla population indicator can lag behind a correction for a short time.
-
-The controller intentionally credits only part of scheduled-but-not-yet-established residents. This makes it retry aggressively during a death wave instead of assuming every pending household will arrive immediately.
-
-### Emergency growth preset
-
-The Options page contains `APPLY EMERGENCY GROWTH PRESET`. It configures:
-
-```text
-Population trend control:             On
-Continuous direct growth lock:        On
-Target net population change/day:     +5,000
-Direct correction strength:           100%
-Maximum direct residents/day:         250,000
-Maximum direct residents/check:       50,000
-Trend deadband:                        0
-Immigration assist:                    On
-Birth assist:                          On
-Maximum automatic birth rate:         500%
-Forced outflow:                        Off
-Manual immigration controller:        Off
-Manual birth controller:              Off
-```
-
-For a city that must never shrink, use direct mode with a target of `0/day` or any positive value and leave forced outflow disabled.
+Turning off the Cim Rejuvenator master switch restores the previous enabled state of the vanilla `DeathCheckSystem`.
 
 ## Rejuvenation
 
 - Rejuvenation chance from 0% to 100%.
 - Configurable Adult age after rejuvenation.
-- Optional minimum-health restoration.
+- Optional health restoration.
 - Up to **250,000 rejuvenations per simulation day**.
 - Up to **100,000 rejuvenations per population sweep**.
 - Optional minimum Elderly share.
@@ -80,7 +47,7 @@ For a city that must never shrink, use direct mode with a target of `0/day` or a
 
 The established resident population can be moved toward configurable Child, Teen, Adult, and Elderly target weights. Weights are normalized automatically and do not need to total 100.
 
-The default demographic profile is:
+Default target profile:
 
 ```text
 Child:    15
@@ -91,52 +58,54 @@ Elderly:  15
 
 Worker, active-trip, and enrolled-student protections reduce disruptive life-stage conversion.
 
+## Population trend control
+
+### Adaptive mode
+
+Adaptive mode keeps the vanilla population flow and steers immigration and birth rates toward the selected net population target. It is the less invasive mode.
+
+### Continuous direct growth lock
+
+Direct mode monitors the vanilla city population component throughout the simulation day and maintains a protected population floor.
+
+- `0/day` targets no decline.
+- Positive values move the protected floor upward.
+- Negative values can suppress inflow and optionally force household outflow.
+
+When population falls below the protected trajectory, direct mode can schedule normal resident household prefabs through outside connections instead of waiting for residential demand alone.
+
+The target range is **-500,000 to +500,000 residents/day**. Direct injection can be capped separately per check and per simulation day.
+
+With the 0.7.0 death lock active, direct trend control is mainly useful for deliberate growth and for compensating residents who actually move away rather than for replacing deaths.
+
 ## Immigration control
 
 - Manual immigration intensity from 0% to 100%.
-- Optional daily incoming-resident cap up to 1,000,000.
+- Optional incoming-resident cap up to 1,000,000/day.
 - Optional resident population ceiling up to 5,000,000.
 - Incoming age shaping with separate Child, Teen, Adult, and Elderly weights.
-
-The direct growth lock can inject resident households without relying on positive residential demand. Manual immigration caps and ceilings only apply when the manual immigration controller is enabled.
 
 ## Birth control
 
 - Birth-rate multiplier from 0% to 1,000%.
 - Optional daily birth cap.
-- Optional pause when the Child demographic target is reached.
-- Trend control can use births as an assist channel.
+- Optional pause at the Child demographic target.
+- Population trend control can use births as an assist channel.
 
 Cim Rejuvenator scales `CitizenParametersData.m_BaseBirthRate` and `m_AdultFemaleBirthRateBonus` while birth control is active and restores captured baseline values when control is released.
 
 ## Localization
 
-The mod registers localization against the game's supported locales on startup.
+Localization follows the game locale at startup.
 
-- Portuguese game locale: Portuguese UI.
-- Other currently unsupported languages: complete English fallback.
+- Portuguese locale: Portuguese UI.
+- Other currently unsupported locales: English fallback.
 
-The repository source, comments, documentation, and build tooling remain in English. Translation strings are kept in dedicated locale source files.
-
-## Statistics and diagnostics
-
-The Options page reports:
-
-- loaded DLL version;
-- established resident population;
-- Child, Teen, Adult, and Elderly counts;
-- rejuvenation and demographic-conversion counters;
-- detected births and incoming residents;
-- effective immigration and birth rates;
-- trend target and measured daily change;
-- protected growth floor;
-- current growth-lock shortfall;
-- pending direct residents;
-- direct residents and households scheduled;
-- forced-outflow counters;
-- controller status.
+Repository source code, comments, documentation, and build tooling remain in English. Translation strings live in dedicated locale source files.
 
 ## Build on Linux / Proton
+
+Initial clone:
 
 ```bash
 git clone https://github.com/decodxr/CimRejuvenator.git
@@ -145,7 +114,7 @@ chmod +x build-no-unity-linux.sh
 ./build-no-unity-linux.sh --deploy
 ```
 
-For later updates:
+Update an existing clone:
 
 ```bash
 cd ~/CimRejuvenator
@@ -153,9 +122,9 @@ git pull --ff-only
 ./build-no-unity-linux.sh --deploy
 ```
 
-The direct build uses the managed assemblies from the installed game and does not require Unity editor activation.
+The direct build uses managed assemblies from the installed game and does not require Unity editor activation.
 
-The default Proton deployment target is:
+Default Proton deployment target:
 
 ```text
 ~/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Mods/CimRejuvenator
@@ -173,11 +142,12 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 ## Compatibility
 
-Population mods can overlap with Cim Rejuvenator when they control the same simulation systems.
+Population mods can overlap when they control the same vanilla systems.
 
-- Avoid running another fertility mod while Cim Rejuvenator birth control or trend birth assist is active.
-- Immigration mods that directly enable or disable `HouseholdSpawnSystem` can conflict with immigration control.
-- Direct growth lock schedules normal household entities and can create substantial housing, traffic, education, and employment demand when configured aggressively.
+- Birth/fertility mods can conflict with Cim Rejuvenator birth control.
+- Immigration mods that enable or disable `HouseholdSpawnSystem` can conflict with immigration control.
+- Mods that replace `DeathCheckSystem`, `SicknessCheckSystem`, `HealthProblemSystem`, `AddHealthProblemSystem`, or resident-removal behavior can conflict with the 0.7.0 death lock.
+- Aggressive direct household injection can create substantial housing, traffic, education, employment, and service demand.
 
 ## Logs
 
@@ -190,9 +160,9 @@ Linux / Proton logs are normally under:
 Useful command:
 
 ```bash
-grep -RniE "CimRejuvenator|PopulationTrendSystem|Exception|ERROR" \
+grep -RniE "CimRejuvenator|Death lock|PopulationTrendSystem|Exception|ERROR" \
 "$HOME/.local/share/Steam/steamapps/compatdata/949230/pfx/drive_c/users/steamuser/AppData/LocalLow/Colossal Order/Cities Skylines II/Logs" \
-| tail -250
+| tail -300
 ```
 
 ## License
@@ -205,4 +175,4 @@ Selling the software or a derivative, charging for downloads or access, placing 
 
 Ordinary monetized videos, livestreams, reviews, screenshots, and tutorials that merely feature the mod are allowed as long as access to the software itself remains free.
 
-Earlier copies that were already distributed under MIT remain governed by the MIT license that accompanied those copies.
+Earlier copies already distributed under MIT remain governed by the MIT license that accompanied those copies.
