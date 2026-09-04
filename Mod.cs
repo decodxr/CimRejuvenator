@@ -10,7 +10,7 @@ namespace CimRejuvenator
     public sealed class Mod : IMod
     {
         public const string ModId = "CimRejuvenator";
-        public const string Version = "0.6.1";
+        public const string Version = "0.7.0";
 
         public static readonly ILog Log = LogManager
             .GetLogger(ModId)
@@ -38,7 +38,15 @@ namespace CimRejuvenator
             updateSystem.UpdateAt<BirthRateControlSystem>(SystemUpdatePhase.GameSimulation);
             updateSystem.UpdateAt<ImmigrationControlSystem>(SystemUpdatePhase.GameSimulation);
 
-            Log.Info("Registered population management, flow, trend, birth-rate, and immigration systems.");
+            // Absolute resident death lock. The pre-removal pass also revives corpses already
+            // present in a loaded save. Event, sickness, and health passes intercept every known
+            // vanilla path that can set HealthProblemFlags.Dead on a citizen.
+            updateSystem.UpdateBefore<DeathRemovalGuardSystem, Game.Citizens.HouseholdAndCitizenRemoveSystem>(SystemUpdatePhase.Modification2);
+            updateSystem.UpdateAfter<DeathEventGuardSystem, Game.Events.AddHealthProblemSystem>(SystemUpdatePhase.Modification4);
+            updateSystem.UpdateAfter<DeathSicknessGuardSystem, Game.Simulation.SicknessCheckSystem>(SystemUpdatePhase.GameSimulation);
+            updateSystem.UpdateAfter<DeathProtectionSystem, Game.Simulation.HealthProblemSystem>(SystemUpdatePhase.GameSimulation);
+
+            Log.Info("Registered population management, flow, trend, birth-rate, immigration, and absolute death-protection systems.");
         }
 
         private static void RegisterLocalization()
