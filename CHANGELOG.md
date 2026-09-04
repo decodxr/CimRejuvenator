@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.7.0
+
+### Added
+
+- Absolute resident death lock while the Cim Rejuvenator master switch is enabled.
+- Vanilla `DeathCheckSystem` is suspended, preventing normal old-age and sickness/injury death rolls from committing.
+- A sickness guard clears fatal `HealthProblemFlags.Dead` states immediately after `SicknessCheckSystem`.
+- A health guard clears fatal states immediately after `HealthProblemSystem`.
+- An event guard clears disaster/event deaths immediately after `AddHealthProblemSystem`.
+- A pre-removal guard revives any remaining established resident corpse before `HouseholdAndCitizenRemoveSystem` can delete it.
+- Revived residents keep their citizen entity and household membership, have fatal/transport health flags cleared, and are restored to full health.
+
+### Behavior
+
+- Established residents can still reduce the city population by moving away normally.
+- Tourists and commuters are not protected by the resident death lock.
+- The master `Enable Cim Rejuvenator` switch also controls death protection. Turning the mod off restores the previous enabled state of the vanilla `DeathCheckSystem`.
+- Event systems may emit a casualty/death statistic before the guard clears the fatal state; the protected resident remains in the city. The population result, not a same-tick event counter, is the authoritative test of the lock.
+
 ## 0.6.1
 
 ### Fixed
