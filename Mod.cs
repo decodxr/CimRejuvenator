@@ -38,13 +38,15 @@ namespace CimRejuvenator
             updateSystem.UpdateAt<BirthRateControlSystem>(SystemUpdatePhase.GameSimulation);
             updateSystem.UpdateAt<ImmigrationControlSystem>(SystemUpdatePhase.GameSimulation);
 
-            // Absolute resident death lock. The pre-removal pass also revives corpses already
-            // present in a loaded save. Event, sickness, and health passes intercept every known
-            // vanilla path that can set HealthProblemFlags.Dead on a citizen.
+            // Absolute resident death lock. The controller runs immediately before vanilla's main
+            // death checker so it can keep DeathCheckSystem disabled even if another system changes
+            // its Enabled state. The remaining guards catch every known non-DeathCheck path that
+            // can write HealthProblemFlags.Dead, plus a final guard before corpse removal.
             updateSystem.UpdateBefore<DeathRemovalGuardSystem, Game.Citizens.HouseholdAndCitizenRemoveSystem>(SystemUpdatePhase.Modification2);
             updateSystem.UpdateAfter<DeathEventGuardSystem, Game.Events.AddHealthProblemSystem>(SystemUpdatePhase.Modification4);
+            updateSystem.UpdateBefore<DeathProtectionSystem, Game.Simulation.DeathCheckSystem>(SystemUpdatePhase.GameSimulation);
             updateSystem.UpdateAfter<DeathSicknessGuardSystem, Game.Simulation.SicknessCheckSystem>(SystemUpdatePhase.GameSimulation);
-            updateSystem.UpdateAfter<DeathProtectionSystem, Game.Simulation.HealthProblemSystem>(SystemUpdatePhase.GameSimulation);
+            updateSystem.UpdateAfter<DeathHealthGuardSystem, Game.Simulation.HealthProblemSystem>(SystemUpdatePhase.GameSimulation);
 
             Log.Info("Registered population management, flow, trend, birth-rate, immigration, and absolute death-protection systems.");
         }
